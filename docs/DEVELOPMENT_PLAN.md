@@ -13,6 +13,7 @@
 1. **尊重 AutoGLM 特性**：AutoGLM 是端到端的视觉语言模型，同时承担"感知+决策"，不强行拆分
 2. **最小改动原则**：保持现有 PhoneAgent 核心逻辑，通过封装和扩展实现增强
 3. **数据安全分层**：敏感数据（截屏）保持本地，仅文本信息可选择性传递给云端
+4. **合理的任务粒度**：Orchestrator 下达目标明确的完整任务，StepExecutor 负责执行多步操作
 
 ### 架构图
 
@@ -21,18 +22,28 @@
                                  │
                                  ▼
               ┌─────────────────────────────────┐
-              │      Orchestrator Agent         │  ← 新增：Agno 实现
-              │  (任务理解 + 步骤分解 + 调度)     │     可用云端/本地 LLM
+              │      Orchestrator Agent         │  ← Agno AgentOS 实现
+              │                                 │     可用云端 LLM（如 QWEN）
+              │  职责:                           │
+              │  - 理解用户高级需求               │
+              │  - 规划任务（拆分为 1-5 个子任务）  │
+              │  - 汇总执行结果                   │
+              │  - 与用户交互反馈                 │
               │                                 │
               │  内置能力:                        │
               │  - Memory（用户偏好记忆）         │
               │  - Knowledge（操作知识检索）      │
               └───────────────┬─────────────────┘
-                              │ 下发子任务（纯文本）
+                              │ 下发完整子任务（纯文本）
+                              │ 如："打开淘宝，搜索 iPhone 16，找到最低价"
                               ▼
               ┌─────────────────────────────────┐
-              │       StepExecutor Agent        │  ← 现有 PhoneAgent 改造
-              │    (原 PhoneAgent，保持核心)      │     本地 AutoGLM
+              │       StepExecutor Agent        │  ← 本地 AutoGLM
+              │                                 │
+              │  职责:                           │
+              │  - 执行完整的子任务               │
+              │  - 自动处理：截图→理解→点击→输入  │
+              │  - 返回执行结果和关键信息         │
               │                                 │
               │  AutoGLM: 截图 → 思考 → 动作     │
               │  ActionHandler: 执行 ADB        │
@@ -41,6 +52,22 @@
                               ▼
                          手机设备
 ```
+
+### 任务粒度说明
+
+**Orchestrator 的任务粒度（高层规划）：**
+- ✓ "在淘宝搜索 iPhone 16，找到 Apple 旗舰店的价格"
+- ✓ "在京东搜索 iPhone 16，找到京东自营的价格"
+- ✓ "打开微信，给张三发消息说晚上好"
+
+**StepExecutor 的任务粒度（执行细节）：**
+- StepExecutor 接收上述完整任务后，自动执行：
+  - 打开应用 → 点击搜索框 → 输入关键词 → 滑动查找 → 提取信息
+- 这些细节对 Orchestrator 透明，Orchestrator 只需关心最终结果
+
+**错误示例（任务太细碎）：**
+- ✗ Orchestrator 不应下达："点击搜索框"、"输入 iPhone"、"点击搜索按钮"
+- 这样会导致 Orchestrator 需要理解屏幕状态，违背架构设计
 
 ### 现有代码映射
 
@@ -123,30 +150,30 @@ class ExecutionResult:
 
 ---
 
-## Phase 1: 基础改造
+## Phase 1: 基础改造 ✅ 已完成
 
-### 1.1 改造 PhoneAgent 为 StepExecutor
+### 1.1 改造 PhoneAgent 为 StepExecutor ✅
 
-- [ ] 重命名 `PhoneAgent` 为 `StepExecutor`
-- [ ] 添加 `execute_subtask(subtask: str)` 方法，接收文本子任务
-- [ ] 添加 `ExecutionResult` 返回脱敏结果
-- [ ] 保持原有 `run()` 方法兼容，支持直接调用
+- [x] 重命名 `PhoneAgent` 为 `StepExecutor`
+- [x] 添加 `execute_subtask(subtask: str)` 方法，接收文本子任务
+- [x] 添加 `ExecutionResult` 返回脱敏结果
+- [x] 保持原有 `run()` 方法兼容，支持直接调用
 
-### 1.2 创建 Orchestrator Agent
+### 1.2 创建 Orchestrator Agent ✅
 
-- [ ] 基于 Agno Agent 创建 Orchestrator
-- [ ] 配置 System Prompt（任务规划专家）
-- [ ] 将 StepExecutor 封装为 Agno Tool
+- [x] 基于 Agno Agent 创建 Orchestrator
+- [x] 配置 System Prompt（任务规划专家）
+- [x] 将 StepExecutor 封装为 Agno Tool
 
-### 1.3 添加基础 Memory
+### 1.3 添加基础 Memory ✅
 
-- [ ] 配置本地 SQLite 存储
-- [ ] 实现用户偏好记忆（如常用联系人、咖啡口味）
-- [ ] 测试记忆的自动提取和检索
+- [x] 配置本地 SQLite 存储
+- [x] 实现用户偏好记忆（如常用联系人、咖啡口味）
+- [ ] 测试记忆的自动提取和检索（待实际测试验证）
 
-### 1.4 更新入口
+### 1.4 更新入口 ✅
 
-- [ ] 更新 `main.py` 支持两种模式：
+- [x] 更新 `main.py` 支持两种模式：
   - 直接模式：`--direct` 直接使用 StepExecutor（兼容现有）
   - 编排模式：`--orchestrate` 使用 Orchestrator + StepExecutor
 

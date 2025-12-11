@@ -77,6 +77,11 @@ class ModelClient:
     def _parse_response(self, content: str) -> tuple[str, str]:
         """
         Parse the model response into thinking and action parts.
+        
+        支持多种格式：
+        1. AutoGLM 格式: <think>...</think><answer>...</answer>
+        2. 花括号格式: {think}...{action}...
+        3. 纯文本格式: 直接返回动作
 
         Args:
             content: Raw response content.
@@ -84,14 +89,29 @@ class ModelClient:
         Returns:
             Tuple of (thinking, action).
         """
-        if "<answer>" not in content:
-            return "", content
-
-        parts = content.split("<answer>", 1)
-        thinking = parts[0].replace("<think>", "").replace("</think>", "").strip()
-        action = parts[1].replace("</answer>", "").strip()
-
-        return thinking, action
+        import re
+        
+        # 格式 1: AutoGLM 格式 <think>...</think><answer>...</answer>
+        if "<answer>" in content:
+            parts = content.split("<answer>", 1)
+            thinking = parts[0].replace("<think>", "").replace("</think>", "").strip()
+            action = parts[1].replace("</answer>", "").strip()
+            return thinking, action
+        
+        # 格式 2: 花括号格式 {think}...{action}...
+        if "{think}" in content and "{action}" in content:
+            # 提取 thinking 部分
+            think_match = re.search(r'\{think\}(.*?)(?=\{action\})', content, re.DOTALL)
+            thinking = think_match.group(1).strip() if think_match else ""
+            
+            # 提取 action 部分
+            action_match = re.search(r'\{action\}(.*?)$', content, re.DOTALL)
+            action = action_match.group(1).strip() if action_match else content
+            
+            return thinking, action
+        
+        # 格式 3: 纯文本，直接作为动作
+        return "", content
 
 
 class MessageBuilder:

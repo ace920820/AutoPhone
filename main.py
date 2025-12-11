@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
 """
-Phone Agent CLI - AI-powered phone automation.
+Phone Agent CLI - AI 驱动的手机自动化
+
+支持两种运行模式：
+1. 直接模式 (--direct): 使用 AutoGLM 直接执行任务（默认，兼容原有行为）
+2. 编排模式 (--orchestrate): 使用 Agno Orchestrator 进行任务规划和执行
 
 Usage:
     python main.py [OPTIONS]
+    python main.py --direct "打开微信"           # 直接模式
+    python main.py --orchestrate "帮我点杯咖啡"   # 编排模式
 
 Environment Variables (可在 .env 文件中配置):
+    # AutoGLM 模型配置（直接模式）
     PHONE_AGENT_BASE_URL: Model API base URL (default: http://localhost:8000/v1)
     PHONE_AGENT_MODEL: Model name (default: autoglm-phone-9b)
     PHONE_AGENT_API_KEY: API key for model authentication (default: EMPTY)
     PHONE_AGENT_MAX_STEPS: Maximum steps per task (default: 100)
     PHONE_AGENT_DEVICE_ID: ADB device ID for multi-device setups
     PHONE_AGENT_LANG: Language for system prompt (cn or en, default: cn)
+    
+    # Orchestrator LLM 配置（编排模式）
+    LLM_API_KEY: Orchestrator LLM API key
+    LLM_BASE_URL: Orchestrator LLM API base URL
+    LLM_MODEL: Orchestrator LLM model name (default: qwen-plus)
 """
 
 import argparse
@@ -32,9 +44,8 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 
-from phone_agent import PhoneAgent
+from phone_agent import PhoneAgent, StepExecutor, ExecutorConfig
 from phone_agent.adb import ADBConnection, list_devices
-from phone_agent.agent import AgentConfig
 from phone_agent.config.apps import list_supported_apps
 from phone_agent.model import ModelConfig
 
@@ -386,6 +397,70 @@ Examples:
         help="Language for system prompt (cn or en, default: cn)",
     )
 
+    # 运行模式选项
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--direct",
+        action="store_true",
+        default=True,
+        help="直接模式：使用 AutoGLM 直接执行任务（默认）",
+    )
+    mode_group.add_argument(
+        "--orchestrate",
+        action="store_true",
+        help="编排模式：使用 Agno Orchestrator 进行任务规划",
+    )
+    
+    # Orchestrator 配置
+    parser.add_argument(
+        "--llm-model",
+        type=str,
+        default=os.getenv("LLM_MODEL", "qwen-plus"),
+        help="Orchestrator LLM 模型名称",
+    )
+    parser.add_argument(
+        "--llm-api-key",
+        type=str,
+        default=os.getenv("LLM_API_KEY"),
+        help="Orchestrator LLM API 密钥",
+    )
+    parser.add_argument(
+        "--llm-base-url",
+        type=str,
+        default=os.getenv("LLM_BASE_URL"),
+        help="Orchestrator LLM API 基础 URL",
+    )
+    parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        help="禁用 Orchestrator 的记忆功能",
+    )
+    parser.add_argument(
+        "--user-id",
+        type=str,
+        default=None,
+        help="用户 ID（用于记忆隔离）",
+    )
+    
+    # AgentOS 服务模式
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="启动 AgentOS REST API 服务（编排模式）",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=7777,
+        help="AgentOS 服务端口（默认 7777）",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="AgentOS 服务地址（默认 0.0.0.0）",
+    )
+
     parser.add_argument(
         "task",
         nargs="?",
@@ -466,6 +541,190 @@ def handle_device_commands(args) -> bool:
     return False
 
 
+def run_direct_mode(args, model_config, executor_config):
+    """
+    直接模式：使用 StepExecutor (原 PhoneAgent) 直接执行任务
+    """
+    # 创建执行器
+    executor = StepExecutor(
+        model_config=model_config,
+        executor_config=executor_config,
+    )
+
+    # 打印头部信息
+    print("=" * 50)
+    print("📱 Phone Agent - 直接模式")
+    print("=" * 50)
+    print(f"Model: {model_config.model_name}")
+    print(f"Base URL: {model_config.base_url}")
+    print(f"Max Steps: {executor_config.max_steps}")
+    print(f"Language: {executor_config.lang}")
+
+    # 显示设备信息
+    devices = list_devices()
+    if executor_config.device_id:
+        print(f"Device: {executor_config.device_id}")
+    elif devices:
+        print(f"Device: {devices[0].device_id} (auto-detected)")
+
+    print("=" * 50)
+
+    # 执行任务或进入交互模式
+    if args.task:
+        print(f"\n📝 任务: {args.task}\n")
+        result = executor.run(args.task)
+        print(f"\n✅ 结果: {result}")
+    else:
+        # 交互模式
+        print("\n进入交互模式，输入 'quit' 退出\n")
+
+        while True:
+            try:
+                task = input("📝 请输入任务: ").strip()
+
+                if task.lower() in ("quit", "exit", "q"):
+                    print("👋 再见!")
+                    break
+
+                if not task:
+                    continue
+
+                print()
+                result = executor.run(task)
+                print(f"\n✅ 结果: {result}\n")
+                executor.reset()
+
+            except KeyboardInterrupt:
+                print("\n\n👋 再见!")
+                break
+            except Exception as e:
+                print(f"\n❌ 错误: {e}\n")
+
+
+def run_orchestrate_mode(args, model_config, executor_config):
+    """
+    编排模式：使用 Agno Orchestrator 进行任务规划和执行
+    """
+    # 检查 Orchestrator 配置
+    if not args.llm_api_key:
+        print("❌ 编排模式需要配置 LLM API 密钥")
+        print("   请设置环境变量 LLM_API_KEY 或使用 --llm-api-key 参数")
+        sys.exit(1)
+    
+    # 延迟导入 orchestrator 模块
+    try:
+        from phone_agent.orchestrator import create_orchestrator
+    except ImportError as e:
+        print(f"❌ 导入 Orchestrator 模块失败: {e}")
+        print("   请确保已安装 agno 库: pip install agno")
+        sys.exit(1)
+    
+    # 创建 StepExecutor
+    executor = StepExecutor(
+        model_config=model_config,
+        executor_config=executor_config,
+    )
+    
+    # 创建 Orchestrator
+    try:
+        orchestrator = create_orchestrator(
+            executor=executor,
+            model_id=args.llm_model,
+            api_key=args.llm_api_key,
+            base_url=args.llm_base_url,
+            enable_memory=not args.no_memory,
+            verbose=not args.quiet,
+        )
+    except Exception as e:
+        print(f"❌ 创建 Orchestrator 失败: {e}")
+        sys.exit(1)
+    
+    # 打印头部信息
+    print("=" * 50)
+    print("🤖 Phone Agent - 编排模式 (Orchestrator)")
+    print("=" * 50)
+    print(f"Orchestrator LLM: {args.llm_model}")
+    print(f"Executor Model: {model_config.model_name}")
+    print(f"Memory: {'启用' if not args.no_memory else '禁用'}")
+    
+    # 显示设备信息
+    devices = list_devices()
+    if executor_config.device_id:
+        print(f"Device: {executor_config.device_id}")
+    elif devices:
+        print(f"Device: {devices[0].device_id} (auto-detected)")
+    
+    print("=" * 50)
+    
+    # 执行任务或进入交互模式
+    if args.task:
+        print(f"\n📝 任务: {args.task}\n")
+        result = orchestrator.run(args.task, user_id=args.user_id)
+        print(f"\n✅ 完成")
+    else:
+        # 交互模式
+        orchestrator.run_interactive(user_id=args.user_id)
+
+
+def run_serve_mode(args, model_config, executor_config):
+    """
+    AgentOS 服务模式：启动 REST API 服务
+    """
+    # 检查 Orchestrator 配置
+    if not args.llm_api_key:
+        print("❌ AgentOS 服务模式需要配置 LLM API 密钥")
+        print("   请设置环境变量 LLM_API_KEY 或使用 --llm-api-key 参数")
+        sys.exit(1)
+    
+    # 延迟导入 orchestrator 模块
+    try:
+        from phone_agent.orchestrator import serve_agent_os
+    except ImportError as e:
+        print(f"❌ 导入 Orchestrator 模块失败: {e}")
+        print("   请确保已安装 agno 库: pip install agno uvicorn")
+        sys.exit(1)
+    
+    # 创建 StepExecutor
+    executor = StepExecutor(
+        model_config=model_config,
+        executor_config=executor_config,
+    )
+    
+    # 打印头部信息
+    print("=" * 50)
+    print("🚀 Phone Agent - AgentOS 服务模式")
+    print("=" * 50)
+    print(f"Orchestrator LLM: {args.llm_model}")
+    print(f"Executor Model: {model_config.model_name}")
+    print(f"Memory: {'启用' if not args.no_memory else '禁用'}")
+    print(f"服务地址: http://{args.host}:{args.port}")
+    print(f"API 文档: http://{args.host}:{args.port}/docs")
+    
+    # 显示设备信息
+    devices = list_devices()
+    if executor_config.device_id:
+        print(f"Device: {executor_config.device_id}")
+    elif devices:
+        print(f"Device: {devices[0].device_id} (auto-detected)")
+    
+    print("=" * 50)
+    
+    # 启动 AgentOS 服务
+    try:
+        serve_agent_os(
+            executor=executor,
+            port=args.port,
+            host=args.host,
+            model_id=args.llm_model,
+            api_key=args.llm_api_key,
+            base_url=args.llm_base_url,
+            enable_memory=not args.no_memory,
+        )
+    except Exception as e:
+        print(f"❌ 启动 AgentOS 服务失败: {e}")
+        sys.exit(1)
+
+
 def main():
     """Main entry point."""
     args = parse_args()
@@ -496,67 +755,23 @@ def main():
         api_key=args.apikey,
     )
 
-    agent_config = AgentConfig(
+    executor_config = ExecutorConfig(
         max_steps=args.max_steps,
         device_id=args.device_id,
         verbose=not args.quiet,
         lang=args.lang,
     )
 
-    # Create agent
-    agent = PhoneAgent(
-        model_config=model_config,
-        agent_config=agent_config,
-    )
-
-    # Print header
-    print("=" * 50)
-    print("Phone Agent - AI-powered phone automation")
-    print("=" * 50)
-    print(f"Model: {model_config.model_name}")
-    print(f"Base URL: {model_config.base_url}")
-    print(f"Max Steps: {agent_config.max_steps}")
-    print(f"Language: {agent_config.lang}")
-
-    # Show device info
-    devices = list_devices()
-    if agent_config.device_id:
-        print(f"Device: {agent_config.device_id}")
-    elif devices:
-        print(f"Device: {devices[0].device_id} (auto-detected)")
-
-    print("=" * 50)
-
-    # Run with provided task or enter interactive mode
-    if args.task:
-        print(f"\nTask: {args.task}\n")
-        result = agent.run(args.task)
-        print(f"\nResult: {result}")
+    # 根据模式运行
+    if args.serve:
+        # AgentOS 服务模式
+        run_serve_mode(args, model_config, executor_config)
+    elif args.orchestrate:
+        # 编排模式（直接调用）
+        run_orchestrate_mode(args, model_config, executor_config)
     else:
-        # Interactive mode
-        print("\nEntering interactive mode. Type 'quit' to exit.\n")
-
-        while True:
-            try:
-                task = input("Enter your task: ").strip()
-
-                if task.lower() in ("quit", "exit", "q"):
-                    print("Goodbye!")
-                    break
-
-                if not task:
-                    continue
-
-                print()
-                result = agent.run(task)
-                print(f"\nResult: {result}\n")
-                agent.reset()
-
-            except KeyboardInterrupt:
-                print("\n\nInterrupted. Goodbye!")
-                break
-            except Exception as e:
-                print(f"\nError: {e}\n")
+        # 直接模式
+        run_direct_mode(args, model_config, executor_config)
 
 
 if __name__ == "__main__":
