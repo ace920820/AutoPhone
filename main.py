@@ -5,16 +5,26 @@ Phone Agent CLI - AI-powered phone automation.
 Usage:
     python main.py [OPTIONS]
 
-Environment Variables:
+Environment Variables (可在 .env 文件中配置):
     PHONE_AGENT_BASE_URL: Model API base URL (default: http://localhost:8000/v1)
     PHONE_AGENT_MODEL: Model name (default: autoglm-phone-9b)
     PHONE_AGENT_API_KEY: API key for model authentication (default: EMPTY)
     PHONE_AGENT_MAX_STEPS: Maximum steps per task (default: 100)
     PHONE_AGENT_DEVICE_ID: ADB device ID for multi-device setups
+    PHONE_AGENT_LANG: Language for system prompt (cn or en, default: cn)
 """
 
 import argparse
 import os
+
+# 加载 .env 文件中的环境变量配置
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # 从 .env 文件加载环境变量
+    print("📋 已加载 .env 配置文件")
+except ImportError:
+    # 如果没有安装 python-dotenv，跳过 .env 文件加载
+    pass
 import shutil
 import subprocess
 import sys

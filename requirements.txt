@@ -1,5 +1,6 @@
 Pillow>=12.0.0
 openai>=2.9.0
+python-dotenv>=1.0.0  # 支持从 .env 文件加载环境变量
 
 # For Model Deployment
 

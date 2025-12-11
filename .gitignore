@@ -55,6 +55,10 @@ Thumbs.db
 /tmp/
 screenshots/
 
+# Environment variables (不要提交敏感配置)
+.env
+.env.local
+
 # Keep old files during transition
 call_model.py
 app_package_name.py
