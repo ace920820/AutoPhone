@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Phone Agent CLI - AI-powered phone automation.
+Phone Agent 命令行工具 - AI 驱动的手机自动化。
 
-Usage:
+用法:
     python main.py [OPTIONS]
 
-Environment Variables:
-    PHONE_AGENT_BASE_URL: Model API base URL (default: http://localhost:8000/v1)
-    PHONE_AGENT_MODEL: Model name (default: autoglm-phone-9b)
-    PHONE_AGENT_API_KEY: API key for model authentication (default: EMPTY)
-    PHONE_AGENT_MAX_STEPS: Maximum steps per task (default: 100)
-    PHONE_AGENT_DEVICE_ID: ADB device ID for multi-device setups
+环境变量:
+    PHONE_AGENT_BASE_URL: 模型 API 基础 URL（默认: http://localhost:8000/v1）
+    PHONE_AGENT_MODEL: 模型名称（默认: autoglm-phone-9b）
+    PHONE_AGENT_API_KEY: 模型认证 API 密钥（默认: EMPTY）
+    PHONE_AGENT_MAX_STEPS: 每个任务的最大步数（默认: 100）
+    PHONE_AGENT_DEVICE_ID: 多设备设置中的 ADB 设备 ID
 """
 
 import argparse
@@ -21,7 +21,7 @@ import sys
 import io
 from urllib.parse import urlparse
 
-# Fix for Windows encoding issues
+# 修复 Windows 编码问题
 if sys.platform.startswith('win'):
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding='utf-8')
@@ -39,22 +39,22 @@ from phone_agent.model import ModelConfig
 
 def check_system_requirements() -> bool:
     """
-    Check system requirements before running the agent.
+    在运行 Agent 之前检查系统要求。
 
-    Checks:
-    1. ADB tools installed
-    2. At least one device connected
-    3. ADB Keyboard installed on the device
+    检查项:
+    1. ADB 工具是否已安装
+    2. 是否至少连接了一个设备
+    3. 设备上是否已安装 ADB Keyboard
 
     Returns:
-        True if all checks pass, False otherwise.
+        如果所有检查通过返回 True，否则返回 False。
     """
     print("🔍 Checking system requirements...")
     print("-" * 50)
 
     all_passed = True
 
-    # Check 1: ADB installed
+    # 检查 1: ADB 是否已安装
     print("1. Checking ADB installation...", end=" ")
     if shutil.which("adb") is None:
         print("❌ FAILED")
@@ -67,7 +67,7 @@ def check_system_requirements() -> bool:
         )
         all_passed = False
     else:
-        # Double check by running adb version
+        # 通过运行 adb version 进行二次确认
         try:
             result = subprocess.run(
                 ["adb", "version"], capture_output=True, text=True, timeout=10
@@ -88,20 +88,20 @@ def check_system_requirements() -> bool:
             print("   Error: ADB command timed out.")
             all_passed = False
 
-    # If ADB is not installed, skip remaining checks
+    # 如果 ADB 未安装，跳过剩余检查
     if not all_passed:
         print("-" * 50)
         print("❌ System check failed. Please fix the issues above.")
         return False
 
-    # Check 2: Device connected
+    # 检查 2: 设备是否已连接
     print("2. Checking connected devices...", end=" ")
     try:
         result = subprocess.run(
             ["adb", "devices"], capture_output=True, text=True, timeout=10
         )
         lines = result.stdout.strip().split("\n")
-        # Filter out header and empty lines, look for 'device' status
+        # 过滤标题和空行，查找 'device' 状态
         devices = [line for line in lines[1:] if line.strip() and "\tdevice" in line]
 
         if not devices:
@@ -124,13 +124,13 @@ def check_system_requirements() -> bool:
         print(f"   Error: {e}")
         all_passed = False
 
-    # If no device connected, skip ADB Keyboard check
+    # 如果没有设备连接，跳过 ADB Keyboard 检查
     if not all_passed:
         print("-" * 50)
         print("❌ System check failed. Please fix the issues above.")
         return False
 
-    # Check 3: ADB Keyboard installed
+    # 检查 3: ADB Keyboard 是否已安装
     print("3. Checking ADB Keyboard...", end=" ")
     try:
         result = subprocess.run(
@@ -177,41 +177,41 @@ def check_system_requirements() -> bool:
 
 def check_model_api(base_url: str, model_name: str, api_key: str = "EMPTY") -> bool:
     """
-    Check if the model API is accessible and the specified model exists.
+    检查模型 API 是否可访问以及指定的模型是否存在。
 
-    Checks:
-    1. Network connectivity to the API endpoint
-    2. Model exists in the available models list
+    检查项:
+    1. 到 API 端点的网络连接
+    2. 模型是否存在于可用模型列表中
 
     Args:
-        base_url: The API base URL
-        model_name: The model name to check
-        api_key: The API key for authentication
+        base_url: API 基础 URL
+        model_name: 要检查的模型名称
+        api_key: 认证用的 API 密钥
 
     Returns:
-        True if all checks pass, False otherwise.
+        如果所有检查通过返回 True，否则返回 False。
     """
     print("🔍 Checking model API...")
     print("-" * 50)
 
     all_passed = True
 
-    # Check 1: Network connectivity
+    # 检查 1: 网络连接
     print(f"1. Checking API connectivity ({base_url})...", end=" ")
     try:
-        # Parse the URL to get host and port
+        # 解析 URL 获取主机和端口
         parsed = urlparse(base_url)
 
-        # Create OpenAI client
+        # 创建 OpenAI 客户端
         client = OpenAI(base_url=base_url, api_key=api_key, timeout=10.0)
 
-        # Try to list models (this tests connectivity)
+        # 尝试列出模型（这会测试连接性）
         models_response = client.models.list()
         available_models = [model.id for model in models_response.data]
 
         print("✅ OK")
 
-        # Check 2: Model exists
+        # 检查 2: 模型是否存在
         """
         print(f"2. Checking model '{model_name}'...", end=" ")
         if model_name in available_models:
@@ -231,7 +231,7 @@ def check_model_api(base_url: str, model_name: str, api_key: str = "EMPTY") -> b
         print("❌ FAILED")
         error_msg = str(e)
 
-        # Provide more specific error messages
+        # 提供更具体的错误信息
         if "Connection refused" in error_msg or "Connection error" in error_msg:
             print(f"   Error: Cannot connect to {base_url}")
             print("   Solution:")
@@ -267,7 +267,7 @@ def check_model_api(base_url: str, model_name: str, api_key: str = "EMPTY") -> b
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
+    """解析命令行参数。"""
     parser = argparse.ArgumentParser(
         description="Phone Agent - AI-powered phone automation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -299,7 +299,7 @@ Examples:
         """,
     )
 
-    # Model options
+    # 模型选项
     parser.add_argument(
         "--base-url",
         type=str,
@@ -328,7 +328,7 @@ Examples:
         help="Maximum steps per task",
     )
 
-    # Device options
+    # 设备选项
     parser.add_argument(
         "--device-id",
         "-d",
@@ -367,7 +367,7 @@ Examples:
         help="Enable TCP/IP debugging on USB device (default port: 5555)",
     )
 
-    # Other options
+    # 其他选项
     parser.add_argument(
         "--quiet", "-q", action="store_true", help="Suppress verbose output"
     )
@@ -396,14 +396,14 @@ Examples:
 
 def handle_device_commands(args) -> bool:
     """
-    Handle device-related commands.
+    处理设备相关命令。
 
     Returns:
-        True if a device command was handled (should exit), False otherwise.
+        如果处理了设备命令（应该退出）返回 True，否则返回 False。
     """
     conn = ADBConnection()
 
-    # Handle --list-devices
+    # 处理 --list-devices
     if args.list_devices:
         devices = list_devices()
         if not devices:
@@ -420,17 +420,17 @@ def handle_device_commands(args) -> bool:
                 )
         return True
 
-    # Handle --connect
+    # 处理 --connect
     if args.connect:
         print(f"Connecting to {args.connect}...")
         success, message = conn.connect(args.connect)
         print(f"{'✓' if success else '✗'} {message}")
         if success:
-            # Set as default device
+            # 设置为默认设备
             args.device_id = args.connect
-        return not success  # Continue if connection succeeded
+        return not success  # 如果连接成功则继续
 
-    # Handle --disconnect
+    # 处理 --disconnect
     if args.disconnect:
         if args.disconnect == "all":
             print("Disconnecting all remote devices...")
@@ -441,7 +441,7 @@ def handle_device_commands(args) -> bool:
         print(f"{'✓' if success else '✗'} {message}")
         return True
 
-    # Handle --enable-tcpip
+    # 处理 --enable-tcpip
     if args.enable_tcpip:
         port = args.enable_tcpip
         print(f"Enabling TCP/IP debugging on port {port}...")
@@ -450,7 +450,7 @@ def handle_device_commands(args) -> bool:
         print(f"{'✓' if success else '✗'} {message}")
 
         if success:
-            # Try to get device IP
+            # 尝试获取设备 IP
             ip = conn.get_device_ip(args.device_id)
             if ip:
                 print(f"\nYou can now connect remotely using:")
@@ -465,29 +465,29 @@ def handle_device_commands(args) -> bool:
 
 
 def main():
-    """Main entry point."""
+    """主入口函数。"""
     args = parse_args()
 
-    # Handle --list-apps (no system check needed)
+    # 处理 --list-apps（不需要系统检查）
     if args.list_apps:
         print("Supported apps:")
         for app in sorted(list_supported_apps()):
             print(f"  - {app}")
         return
 
-    # Handle device commands (these may need partial system checks)
+    # 处理设备命令（这些可能需要部分系统检查）
     if handle_device_commands(args):
         return
 
-    # Run system requirements check before proceeding
+    # 在继续之前运行系统要求检查
     if not check_system_requirements():
         sys.exit(1)
 
-    # Check model API connectivity and model availability
+    # 检查模型 API 连接和模型可用性
     if not check_model_api(args.base_url, args.model, args.apikey):
         sys.exit(1)
 
-    # Create configurations
+    # 创建配置
     model_config = ModelConfig(
         base_url=args.base_url,
         model_name=args.model,
@@ -501,13 +501,13 @@ def main():
         lang=args.lang,
     )
 
-    # Create agent
+    # 创建 Agent
     agent = PhoneAgent(
         model_config=model_config,
         agent_config=agent_config,
     )
 
-    # Print header
+    # 打印标题
     print("=" * 50)
     print("Phone Agent - AI-powered phone automation")
     print("=" * 50)
@@ -516,7 +516,7 @@ def main():
     print(f"Max Steps: {agent_config.max_steps}")
     print(f"Language: {agent_config.lang}")
 
-    # Show device info
+    # 显示设备信息
     devices = list_devices()
     if agent_config.device_id:
         print(f"Device: {agent_config.device_id}")
@@ -525,13 +525,13 @@ def main():
 
     print("=" * 50)
 
-    # Run with provided task or enter interactive mode
+    # 使用提供的任务运行或进入交互模式
     if args.task:
         print(f"\nTask: {args.task}\n")
         result = agent.run(args.task)
         print(f"\nResult: {result}")
     else:
-        # Interactive mode
+        # 交互模式
         print("\nEntering interactive mode. Type 'quit' to exit.\n")
 
         while True:

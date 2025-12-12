@@ -1,4 +1,4 @@
-"""Model client module for AI inference."""
+"""AI 推理的模型客户端模块。"""
 
 from phone_agent.model.client import ModelClient, ModelConfig
 

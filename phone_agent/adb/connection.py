@@ -1,4 +1,4 @@
-"""ADB connection management for local and remote devices."""
+"""本地和远程设备的 ADB 连接管理。"""
 
 import subprocess
 import time
@@ -8,7 +8,7 @@ from typing import Optional
 
 
 class ConnectionType(Enum):
-    """Type of ADB connection."""
+    """ADB 连接类型。"""
 
     USB = "usb"
     WIFI = "wifi"
@@ -17,7 +17,7 @@ class ConnectionType(Enum):
 
 @dataclass
 class DeviceInfo:
-    """Information about a connected device."""
+    """已连接设备的信息。"""
 
     device_id: str
     status: str
@@ -28,47 +28,47 @@ class DeviceInfo:
 
 class ADBConnection:
     """
-    Manages ADB connections to Android devices.
+    管理到 Android 设备的 ADB 连接。
 
-    Supports USB, WiFi, and remote TCP/IP connections.
+    支持 USB、WiFi 和远程 TCP/IP 连接。
 
     Example:
         >>> conn = ADBConnection()
-        >>> # Connect to remote device
+        >>> # 连接到远程设备
         >>> conn.connect("192.168.1.100:5555")
-        >>> # List devices
+        >>> # 列出设备
         >>> devices = conn.list_devices()
-        >>> # Disconnect
+        >>> # 断开连接
         >>> conn.disconnect("192.168.1.100:5555")
     """
 
     def __init__(self, adb_path: str = "adb"):
         """
-        Initialize ADB connection manager.
+        初始化 ADB 连接管理器。
 
         Args:
-            adb_path: Path to ADB executable.
+            adb_path: ADB 可执行文件的路径。
         """
         self.adb_path = adb_path
 
     def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:
         """
-        Connect to a remote device via TCP/IP.
+        通过 TCP/IP 连接到远程设备。
 
         Args:
-            address: Device address in format "host:port" (e.g., "192.168.1.100:5555").
-            timeout: Connection timeout in seconds.
+            address: 设备地址，格式为 "host:port"（例如 "192.168.1.100:5555"）。
+            timeout: 连接超时时间（秒）。
 
         Returns:
-            Tuple of (success, message).
+            (success, message) 元组。
 
         Note:
-            The remote device must have TCP/IP debugging enabled.
-            On the device, run: adb tcpip 5555
+            远程设备必须启用 TCP/IP 调试。
+            在设备上运行: adb tcpip 5555
         """
-        # Validate address format
+        # 验证地址格式
         if ":" not in address:
-            address = f"{address}:5555"  # Default ADB port
+            address = f"{address}:5555"  # 默认 ADB 端口
 
         try:
             # 使用 UTF-8 编码解决 Windows GBK 编码问题
@@ -97,13 +97,13 @@ class ADBConnection:
 
     def disconnect(self, address: str | None = None) -> tuple[bool, str]:
         """
-        Disconnect from a remote device.
+        断开与远程设备的连接。
 
         Args:
-            address: Device address to disconnect. If None, disconnects all.
+            address: 要断开的设备地址。如果为 None，则断开所有连接。
 
         Returns:
-            Tuple of (success, message).
+            (success, message) 元组。
         """
         try:
             cmd = [self.adb_path, "disconnect"]
@@ -121,10 +121,10 @@ class ADBConnection:
 
     def list_devices(self) -> list[DeviceInfo]:
         """
-        List all connected devices.
+        列出所有已连接的设备。
 
         Returns:
-            List of DeviceInfo objects.
+            DeviceInfo 对象列表。
         """
         try:
             # 使用 UTF-8 编码解决 Windows GBK 编码问题
@@ -138,7 +138,7 @@ class ADBConnection:
             )
 
             devices = []
-            for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+            for line in result.stdout.strip().split("\n")[1:]:  # 跳过标题
                 if not line.strip():
                     continue
 
@@ -147,15 +147,15 @@ class ADBConnection:
                     device_id = parts[0]
                     status = parts[1]
 
-                    # Determine connection type
+                    # 确定连接类型
                     if ":" in device_id:
                         conn_type = ConnectionType.REMOTE
                     elif "emulator" in device_id:
-                        conn_type = ConnectionType.USB  # Emulator via USB
+                        conn_type = ConnectionType.USB  # 通过 USB 连接的模拟器
                     else:
                         conn_type = ConnectionType.USB
 
-                    # Parse additional info
+                    # 解析额外信息
                     model = None
                     for part in parts[2:]:
                         if part.startswith("model:"):
@@ -179,13 +179,13 @@ class ADBConnection:
 
     def get_device_info(self, device_id: str | None = None) -> DeviceInfo | None:
         """
-        Get detailed information about a device.
+        获取设备的详细信息。
 
         Args:
-            device_id: Device ID. If None, uses first available device.
+            device_id: 设备 ID。如果为 None，使用第一个可用设备。
 
         Returns:
-            DeviceInfo or None if not found.
+            DeviceInfo 或如果未找到则返回 None。
         """
         devices = self.list_devices()
 
@@ -203,13 +203,13 @@ class ADBConnection:
 
     def is_connected(self, device_id: str | None = None) -> bool:
         """
-        Check if a device is connected.
+        检查设备是否已连接。
 
         Args:
-            device_id: Device ID to check. If None, checks if any device is connected.
+            device_id: 要检查的设备 ID。如果为 None，检查是否有任何设备连接。
 
         Returns:
-            True if connected, False otherwise.
+            如果已连接返回 True，否则返回 False。
         """
         devices = self.list_devices()
 
@@ -225,20 +225,20 @@ class ADBConnection:
         self, port: int = 5555, device_id: str | None = None
     ) -> tuple[bool, str]:
         """
-        Enable TCP/IP debugging on a USB-connected device.
+        在通过 USB 连接的设备上启用 TCP/IP 调试。
 
-        This allows subsequent wireless connections to the device.
+        这允许后续的无线连接到设备。
 
         Args:
-            port: TCP port for ADB (default: 5555).
-            device_id: Device ID. If None, uses first available device.
+            port: ADB 的 TCP 端口（默认: 5555）。
+            device_id: 设备 ID。如果为 None，使用第一个可用设备。
 
         Returns:
-            Tuple of (success, message).
+            (success, message) 元组。
 
         Note:
-            The device must be connected via USB first.
-            After this, you can disconnect USB and connect via WiFi.
+            设备必须首先通过 USB 连接。
+            之后，您可以断开 USB 并通过 WiFi 连接。
         """
         try:
             cmd = [self.adb_path]
@@ -252,7 +252,7 @@ class ADBConnection:
             output = result.stdout + result.stderr
 
             if "restarting" in output.lower() or result.returncode == 0:
-                time.sleep(2)  # Wait for ADB to restart
+                time.sleep(2)  # 等待 ADB 重启
                 return True, f"TCP/IP mode enabled on port {port}"
             else:
                 return False, output.strip()
@@ -262,13 +262,13 @@ class ADBConnection:
 
     def get_device_ip(self, device_id: str | None = None) -> str | None:
         """
-        Get the IP address of a connected device.
+        获取已连接设备的 IP 地址。
 
         Args:
-            device_id: Device ID. If None, uses first available device.
+            device_id: 设备 ID。如果为 None，使用第一个可用设备。
 
         Returns:
-            IP address string or None if not found.
+            IP 地址字符串或如果未找到则返回 None。
         """
         try:
             cmd = [self.adb_path]
@@ -279,7 +279,7 @@ class ADBConnection:
             # 使用 UTF-8 编码解决 Windows GBK 编码问题
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, encoding='utf-8', errors='replace')
 
-            # Parse IP from route output
+            # 从路由输出中解析 IP
             for line in result.stdout.split("\n"):
                 if "src" in line:
                     parts = line.split()
@@ -287,7 +287,7 @@ class ADBConnection:
                         if part == "src" and i + 1 < len(parts):
                             return parts[i + 1]
 
-            # Alternative: try wlan0 interface
+            # 备选: 尝试 wlan0 接口
             cmd[-1] = "ip addr show wlan0"
             # 使用 UTF-8 编码解决 Windows GBK 编码问题
             result = subprocess.run(
@@ -313,20 +313,20 @@ class ADBConnection:
 
     def restart_server(self) -> tuple[bool, str]:
         """
-        Restart the ADB server.
+        重启 ADB 服务器。
 
         Returns:
-            Tuple of (success, message).
+            (success, message) 元组。
         """
         try:
-            # Kill server
+            # 关闭服务器
             subprocess.run(
                 [self.adb_path, "kill-server"], capture_output=True, timeout=5
             )
 
             time.sleep(1)
 
-            # Start server
+            # 启动服务器
             subprocess.run(
                 [self.adb_path, "start-server"], capture_output=True, timeout=5
             )
@@ -339,13 +339,13 @@ class ADBConnection:
 
 def quick_connect(address: str) -> tuple[bool, str]:
     """
-    Quick helper to connect to a remote device.
+    快速连接到远程设备的辅助函数。
 
     Args:
-        address: Device address (e.g., "192.168.1.100" or "192.168.1.100:5555").
+        address: 设备地址（例如 "192.168.1.100" 或 "192.168.1.100:5555"）。
 
     Returns:
-        Tuple of (success, message).
+        (success, message) 元组。
     """
     conn = ADBConnection()
     return conn.connect(address)
@@ -353,10 +353,10 @@ def quick_connect(address: str) -> tuple[bool, str]:
 
 def list_devices() -> list[DeviceInfo]:
     """
-    Quick helper to list connected devices.
+    快速列出已连接设备的辅助函数。
 
     Returns:
-        List of DeviceInfo objects.
+        DeviceInfo 对象列表。
     """
     conn = ADBConnection()
     return conn.list_devices()

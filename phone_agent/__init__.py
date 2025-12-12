@@ -1,8 +1,7 @@
 """
-Phone Agent - An AI-powered phone automation framework.
+Phone Agent - AI 驱动的手机自动化框架。
 
-This package provides tools for automating Android phone interactions
-using AI models for visual understanding and decision making.
+本包提供使用 AI 模型进行视觉理解和决策的 Android 手机交互自动化工具。
 """
 
 from phone_agent.agent import PhoneAgent

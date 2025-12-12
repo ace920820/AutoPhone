@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Orchestrator Agent CLI - AI-powered phone automation with task orchestration.
+编排 Agent 命令行工具 - AI 驱动的手机自动化任务编排系统。
 
-Usage:
+用法:
     python orchestrator_main.py [OPTIONS]
 """
 
@@ -12,7 +12,7 @@ import sys
 import io
 from dotenv import load_dotenv
 
-# Fix for Windows encoding issues
+# 修复 Windows 编码问题
 if sys.platform.startswith('win'):
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding='utf-8')
@@ -21,17 +21,17 @@ if sys.platform.startswith('win'):
 
 from main import check_system_requirements, check_model_api
 
-# Load environment variables
+# 加载环境变量
 load_dotenv()
 
 def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
+    """解析命令行参数。"""
     parser = argparse.ArgumentParser(
         description="Phone Agent Orchestrator - Complex task automation",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    # Orchestrator Model options
+    # 编排模型选项
     parser.add_argument(
         "--model-id",
         type=str,
@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
         help="Orchestrator API Base URL",
     )
 
-    # Phone Agent Model options
+    # Phone Agent 模型选项
     parser.add_argument(
         "--phone-base-url",
         type=str,
@@ -68,7 +68,7 @@ def parse_args() -> argparse.Namespace:
         help="Phone Agent Model name",
     )
 
-    # Device options
+    # 设备选项
     parser.add_argument(
         "--device-id",
         "-d",
@@ -93,12 +93,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 def main():
-    """Main entry point."""
+    """主入口函数。"""
     args = parse_args()
 
-    # If web mode is requested, start the web server
+    # 如果请求了 Web 模式，启动 Web 服务器
     if args.web:
-        # Set environment variables from args so registry can pick them up
+        # 从参数设置环境变量，以便注册表可以使用它们
         if args.model_id:
             os.environ["LLM_MODEL"] = args.model_id
         if args.api_key:
@@ -121,22 +121,22 @@ def main():
         uvicorn.run(app, host="0.0.0.0", port=8000)
         return
 
-    # Check system requirements (ADB, etc)
+    # 检查系统要求（ADB 等）
     if not check_system_requirements():
         sys.exit(1)
 
-    # Check phone model API connectivity
+    # 检查 Phone 模型 API 连接
     if not check_model_api(args.phone_base_url, args.phone_model):
         sys.exit(1)
 
-    # Verify API Key for Orchestrator
+    # 验证编排 Agent 的 API Key
     if not args.api_key:
-        # Check for DASHSCOPE_API_KEY as well since we are switching to DashScope
+        # 同时检查 DASHSCOPE_API_KEY，因为我们正在切换到 DashScope
         if not os.getenv("DASHSCOPE_API_KEY"):
             print("⚠️ Warning: No API Key found for Orchestrator Agent.")
             print("   Please set LLM_API_KEY or DASHSCOPE_API_KEY in your .env file or provide --api-key argument.")
 
-    # Set environment variables from args so registry can pick them up
+    # 从参数设置环境变量，以便注册表可以使用它们
     if args.model_id:
         os.environ["LLM_MODEL"] = args.model_id
     if args.api_key:
@@ -154,7 +154,7 @@ def main():
     print(f"   Phone Agent Model: {args.phone_model} @ {args.phone_base_url}")
     
     try:
-        # Import here to ensure env vars are set before registry initialization
+        # 在这里导入以确保在注册表初始化之前设置好环境变量
         from phone_agent.registry import get_agent_by_id
         
         agent = get_agent_by_id("phone-orchestrator")
@@ -166,12 +166,12 @@ def main():
         print(f"❌ Failed to initialize agent: {e}")
         sys.exit(1)
 
-    # Run with provided task or enter interactive mode
+    # 使用提供的任务运行或进入交互模式
     if args.task:
         print(f"Task: {args.task}\n")
         agent.print_response(args.task, stream=True)
     else:
-        # Interactive mode
+        # 交互模式
         print("Entering interactive mode. Type 'quit' to exit.\n")
         
         while True:

@@ -1,4 +1,4 @@
-"""Device control utilities for Android automation."""
+"""Android 自动化的设备控制工具。"""
 
 import os
 import subprocess
@@ -10,13 +10,13 @@ from phone_agent.config.apps import APP_PACKAGES
 
 def get_current_app(device_id: str | None = None) -> str:
     """
-    Get the currently focused app name.
+    获取当前焦点应用的名称。
 
     Args:
-        device_id: Optional ADB device ID for multi-device setups.
+        device_id: 可选的 ADB 设备 ID，用于多设备设置。
 
     Returns:
-        The app name if recognized, otherwise "System Home".
+        如果识别则返回应用名称，否则返回 "System Home"。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -30,7 +30,7 @@ def get_current_app(device_id: str | None = None) -> str:
     )
     output = result.stdout
 
-    # Parse window focus info
+    # 解析窗口焦点信息
     for line in output.split("\n"):
         if "mCurrentFocus" in line or "mFocusedApp" in line:
             for app_name, package in APP_PACKAGES.items():
@@ -42,13 +42,13 @@ def get_current_app(device_id: str | None = None) -> str:
 
 def tap(x: int, y: int, device_id: str | None = None, delay: float = 1.0) -> None:
     """
-    Tap at the specified coordinates.
+    在指定坐标处点击。
 
     Args:
-        x: X coordinate.
-        y: Y coordinate.
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after tap.
+        x: X 坐标。
+        y: Y 坐标。
+        device_id: 可选的 ADB 设备 ID。
+        delay: 点击后的延迟（秒）。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -62,13 +62,13 @@ def double_tap(
     x: int, y: int, device_id: str | None = None, delay: float = 1.0
 ) -> None:
     """
-    Double tap at the specified coordinates.
+    在指定坐标处双击。
 
     Args:
-        x: X coordinate.
-        y: Y coordinate.
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after double tap.
+        x: X 坐标。
+        y: Y 坐标。
+        device_id: 可选的 ADB 设备 ID。
+        delay: 双击后的延迟（秒）。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -90,14 +90,14 @@ def long_press(
     delay: float = 1.0,
 ) -> None:
     """
-    Long press at the specified coordinates.
+    在指定坐标处长按。
 
     Args:
-        x: X coordinate.
-        y: Y coordinate.
-        duration_ms: Duration of press in milliseconds.
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after long press.
+        x: X 坐标。
+        y: Y 坐标。
+        duration_ms: 按压时长（毫秒）。
+        device_id: 可选的 ADB 设备 ID。
+        delay: 长按后的延迟（秒）。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -119,24 +119,24 @@ def swipe(
     delay: float = 1.0,
 ) -> None:
     """
-    Swipe from start to end coordinates.
+    从起始坐标滑动到结束坐标。
 
     Args:
-        start_x: Starting X coordinate.
-        start_y: Starting Y coordinate.
-        end_x: Ending X coordinate.
-        end_y: Ending Y coordinate.
-        duration_ms: Duration of swipe in milliseconds (auto-calculated if None).
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after swipe.
+        start_x: 起始 X 坐标。
+        start_y: 起始 Y 坐标。
+        end_x: 结束 X 坐标。
+        end_y: 结束 Y 坐标。
+        duration_ms: 滑动时长（毫秒）（如果为 None 则自动计算）。
+        device_id: 可选的 ADB 设备 ID。
+        delay: 滑动后的延迟（秒）。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
     if duration_ms is None:
-        # Calculate duration based on distance
+        # 根据距离计算时长
         dist_sq = (start_x - end_x) ** 2 + (start_y - end_y) ** 2
         duration_ms = int(dist_sq / 1000)
-        duration_ms = max(1000, min(duration_ms, 2000))  # Clamp between 1000-2000ms
+        duration_ms = max(1000, min(duration_ms, 2000))  # 限制在 1000-2000ms 之间
 
     subprocess.run(
         adb_prefix
@@ -157,11 +157,11 @@ def swipe(
 
 def back(device_id: str | None = None, delay: float = 1.0) -> None:
     """
-    Press the back button.
+    按下返回按钮。
 
     Args:
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after pressing back.
+        device_id: 可选的 ADB 设备 ID。
+        delay: 按下返回后的延迟（秒）。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -173,11 +173,11 @@ def back(device_id: str | None = None, delay: float = 1.0) -> None:
 
 def home(device_id: str | None = None, delay: float = 1.0) -> None:
     """
-    Press the home button.
+    按下主页按钮。
 
     Args:
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after pressing home.
+        device_id: 可选的 ADB 设备 ID。
+        delay: 按下主页后的延迟（秒）。
     """
     adb_prefix = _get_adb_prefix(device_id)
 
@@ -189,15 +189,15 @@ def home(device_id: str | None = None, delay: float = 1.0) -> None:
 
 def launch_app(app_name: str, device_id: str | None = None, delay: float = 1.0) -> bool:
     """
-    Launch an app by name.
+    按名称启动应用。
 
     Args:
-        app_name: The app name (must be in APP_PACKAGES).
-        device_id: Optional ADB device ID.
-        delay: Delay in seconds after launching.
+        app_name: 应用名称（必须在 APP_PACKAGES 中）。
+        device_id: 可选的 ADB 设备 ID。
+        delay: 启动后的延迟（秒）。
 
     Returns:
-        True if app was launched, False if app not found.
+        如果应用已启动返回 True，如果未找到应用返回 False。
     """
     if app_name not in APP_PACKAGES:
         return False
@@ -223,7 +223,7 @@ def launch_app(app_name: str, device_id: str | None = None, delay: float = 1.0) 
 
 
 def _get_adb_prefix(device_id: str | None) -> list:
-    """Get ADB command prefix with optional device specifier."""
+    """获取带有可选设备标识符的 ADB 命令前缀。"""
     if device_id:
         return ["adb", "-s", device_id]
     return ["adb"]

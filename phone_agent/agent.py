@@ -1,4 +1,4 @@
-"""Main PhoneAgent class for orchestrating phone automation."""
+"""用于编排手机自动化的主 PhoneAgent 类。"""
 
 import json
 import traceback
@@ -15,7 +15,7 @@ from phone_agent.model.client import MessageBuilder
 
 @dataclass
 class AgentConfig:
-    """Configuration for the PhoneAgent."""
+    """PhoneAgent 的配置。"""
 
     max_steps: int = 100
     device_id: str | None = None
@@ -30,7 +30,7 @@ class AgentConfig:
 
 @dataclass
 class StepResult:
-    """Result of a single agent step."""
+    """单个 Agent 步骤的结果。"""
 
     success: bool
     finished: bool
@@ -41,16 +41,15 @@ class StepResult:
 
 class PhoneAgent:
     """
-    AI-powered agent for automating Android phone interactions.
+    AI 驱动的 Android 手机交互自动化 Agent。
 
-    The agent uses a vision-language model to understand screen content
-    and decide on actions to complete user tasks.
+    该 Agent 使用视觉语言模型来理解屏幕内容并决定执行操作以完成用户任务。
 
     Args:
-        model_config: Configuration for the AI model.
-        agent_config: Configuration for the agent behavior.
-        confirmation_callback: Optional callback for sensitive action confirmation.
-        takeover_callback: Optional callback for takeover requests.
+        model_config: AI 模型的配置。
+        agent_config: Agent 行为的配置。
+        confirmation_callback: 可选的敏感操作确认回调。
+        takeover_callback: 可选的接管请求回调。
 
     Example:
         >>> from phone_agent import PhoneAgent
@@ -58,7 +57,7 @@ class PhoneAgent:
         >>>
         >>> model_config = ModelConfig(base_url="http://localhost:8000/v1")
         >>> agent = PhoneAgent(model_config)
-        >>> agent.run("Open WeChat and send a message to John")
+        >>> agent.run("打开微信给张三发消息")
     """
 
     def __init__(
@@ -83,24 +82,24 @@ class PhoneAgent:
 
     def run(self, task: str) -> str:
         """
-        Run the agent to complete a task.
+        运行 Agent 来完成任务。
 
         Args:
-            task: Natural language description of the task.
+            task: 任务的自然语言描述。
 
         Returns:
-            Final message from the agent.
+            Agent 的最终消息。
         """
         self._context = []
         self._step_count = 0
 
-        # First step with user prompt
+        # 第一步使用用户提示
         result = self._execute_step(task, is_first=True)
 
         if result.finished:
             return result.message or "Task completed"
 
-        # Continue until finished or max steps reached
+        # 继续直到完成或达到最大步数
         while self._step_count < self.agent_config.max_steps:
             result = self._execute_step(is_first=False)
 
@@ -111,15 +110,15 @@ class PhoneAgent:
 
     def step(self, task: str | None = None) -> StepResult:
         """
-        Execute a single step of the agent.
+        执行 Agent 的单个步骤。
 
-        Useful for manual control or debugging.
+        适用于手动控制或调试。
 
         Args:
-            task: Task description (only needed for first step).
+            task: 任务描述（仅第一步需要）。
 
         Returns:
-            StepResult with step details.
+            包含步骤详情的 StepResult。
         """
         is_first = len(self._context) == 0
 
@@ -129,21 +128,21 @@ class PhoneAgent:
         return self._execute_step(task, is_first)
 
     def reset(self) -> None:
-        """Reset the agent state for a new task."""
+        """重置 Agent 状态以开始新任务。"""
         self._context = []
         self._step_count = 0
 
     def _execute_step(
         self, user_prompt: str | None = None, is_first: bool = False
     ) -> StepResult:
-        """Execute a single step of the agent loop."""
+        """执行 Agent 循环的单个步骤。"""
         self._step_count += 1
 
-        # Capture current screen state
+        # 捕获当前屏幕状态
         screenshot = get_screenshot(self.agent_config.device_id)
         current_app = get_current_app(self.agent_config.device_id)
 
-        # Build messages
+        # 构建消息
         if is_first:
             self._context.append(
                 MessageBuilder.create_system_message(self.agent_config.system_prompt)
@@ -167,7 +166,7 @@ class PhoneAgent:
                 )
             )
 
-        # Get model response
+        # 获取模型响应
         try:
             response = self.model_client.request(self._context)
         except Exception as e:
@@ -181,7 +180,7 @@ class PhoneAgent:
                 message=f"Model error: {e}",
             )
 
-        # Parse action from response
+        # 从响应中解析操作
         try:
             action = parse_action(response.action)
         except ValueError:
@@ -190,7 +189,7 @@ class PhoneAgent:
             action = finish(message=response.action)
 
         if self.agent_config.verbose:
-            # Print thinking process
+            # 打印思考过程
             msgs = get_messages(self.agent_config.lang)
             print("\n" + "=" * 50)
             print(f"💭 {msgs['thinking']}:")
@@ -201,10 +200,10 @@ class PhoneAgent:
             print(json.dumps(action, ensure_ascii=False, indent=2))
             print("=" * 50 + "\n")
 
-        # Remove image from context to save space
+        # 从上下文中移除图像以节省空间
         self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
 
-        # Execute action
+        # 执行操作
         try:
             result = self.action_handler.execute(
                 action, screenshot.width, screenshot.height
@@ -216,14 +215,14 @@ class PhoneAgent:
                 finish(message=str(e)), screenshot.width, screenshot.height
             )
 
-        # Add assistant response to context
+        # 将助手响应添加到上下文
         self._context.append(
             MessageBuilder.create_assistant_message(
                 f"<think>{response.thinking}</think><answer>{response.action}</answer>"
             )
         )
 
-        # Check if finished
+        # 检查是否完成
         finished = action.get("_metadata") == "finish" or result.should_finish
 
         if finished and self.agent_config.verbose:
@@ -244,10 +243,10 @@ class PhoneAgent:
 
     @property
     def context(self) -> list[dict[str, Any]]:
-        """Get the current conversation context."""
+        """获取当前对话上下文。"""
         return self._context.copy()
 
     @property
     def step_count(self) -> int:
-        """Get the current step count."""
+        """获取当前步骤计数。"""
         return self._step_count

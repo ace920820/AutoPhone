@@ -1,4 +1,4 @@
-"""Configuration module for Phone Agent."""
+"""Phone Agent 的配置模块。"""
 
 from phone_agent.config.apps import APP_PACKAGES
 from phone_agent.config.i18n import get_message, get_messages
@@ -8,20 +8,20 @@ from phone_agent.config.prompts_zh import SYSTEM_PROMPT as SYSTEM_PROMPT_ZH
 
 def get_system_prompt(lang: str = "cn") -> str:
     """
-    Get system prompt by language.
+    根据语言获取系统提示词。
 
     Args:
-        lang: Language code, 'cn' for Chinese, 'en' for English.
+        lang: 语言代码，'cn' 表示中文，'en' 表示英文。
 
     Returns:
-        System prompt string.
+        系统提示词字符串。
     """
     if lang == "en":
         return SYSTEM_PROMPT_EN
     return SYSTEM_PROMPT_ZH
 
 
-# Default to Chinese for backward compatibility
+# 默认使用中文以保持向后兼容
 SYSTEM_PROMPT = SYSTEM_PROMPT_ZH
 
 __all__ = [

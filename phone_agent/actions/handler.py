@@ -1,4 +1,4 @@
-"""Action handler for processing AI model outputs."""
+"""用于处理 AI 模型输出的操作处理器。"""
 
 import time
 from dataclasses import dataclass
@@ -21,7 +21,7 @@ from phone_agent.adb import (
 
 @dataclass
 class ActionResult:
-    """Result of an action execution."""
+    """操作执行的结果。"""
 
     success: bool
     should_finish: bool
@@ -31,13 +31,13 @@ class ActionResult:
 
 class ActionHandler:
     """
-    Handles execution of actions from AI model output.
+    处理来自 AI 模型输出的操作执行。
 
     Args:
-        device_id: Optional ADB device ID for multi-device setups.
-        confirmation_callback: Optional callback for sensitive action confirmation.
-            Should return True to proceed, False to cancel.
-        takeover_callback: Optional callback for takeover requests (login, captcha).
+        device_id: 可选的 ADB 设备 ID，用于多设备设置。
+        confirmation_callback: 可选的敏感操作确认回调。
+            返回 True 继续，False 取消。
+        takeover_callback: 可选的接管请求回调（登录、验证码）。
     """
 
     def __init__(
@@ -54,15 +54,15 @@ class ActionHandler:
         self, action: dict[str, Any], screen_width: int, screen_height: int
     ) -> ActionResult:
         """
-        Execute an action from the AI model.
+        执行来自 AI 模型的操作。
 
         Args:
-            action: The action dictionary from the model.
-            screen_width: Current screen width in pixels.
-            screen_height: Current screen height in pixels.
+            action: 来自模型的操作字典。
+            screen_width: 当前屏幕宽度（像素）。
+            screen_height: 当前屏幕高度（像素）。
 
         Returns:
-            ActionResult indicating success and whether to finish.
+            ActionResult 表示成功与否以及是否完成。
         """
         action_type = action.get("_metadata")
 
@@ -96,7 +96,7 @@ class ActionHandler:
             )
 
     def _get_handler(self, action_name: str) -> Callable | None:
-        """Get the handler method for an action."""
+        """获取操作的处理方法。"""
         handlers = {
             "Launch": self._handle_launch,
             "Tap": self._handle_tap,
@@ -118,13 +118,13 @@ class ActionHandler:
     def _convert_relative_to_absolute(
         self, element: list[int], screen_width: int, screen_height: int
     ) -> tuple[int, int]:
-        """Convert relative coordinates (0-1000) to absolute pixels."""
+        """将相对坐标（0-1000）转换为绝对像素。"""
         x = int(element[0] / 1000 * screen_width)
         y = int(element[1] / 1000 * screen_height)
         return x, y
 
     def _handle_launch(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle app launch action."""
+        """处理应用启动操作。"""
         app_name = action.get("app")
         if not app_name:
             return ActionResult(False, False, "No app name specified")
@@ -135,14 +135,14 @@ class ActionHandler:
         return ActionResult(False, False, f"App not found: {app_name}")
 
     def _handle_tap(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle tap action."""
+        """处理点击操作。"""
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
 
         x, y = self._convert_relative_to_absolute(element, width, height)
 
-        # Check for sensitive operation
+        # 检查敏感操作
         if "message" in action:
             if not self.confirmation_callback(action["message"]):
                 return ActionResult(
@@ -155,28 +155,28 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle text input action."""
+        """处理文本输入操作。"""
         text = action.get("text", "")
 
-        # Switch to ADB keyboard
+        # 切换到 ADB 键盘
         original_ime = detect_and_set_adb_keyboard(self.device_id)
         time.sleep(1.0)
 
-        # Clear existing text and type new text
+        # 清除现有文本并输入新文本
         clear_text(self.device_id)
         time.sleep(1.0)
 
         type_text(text, self.device_id)
         time.sleep(1.0)
 
-        # Restore original keyboard
+        # 恢复原始键盘
         restore_keyboard(original_ime, self.device_id)
         time.sleep(1.0)
 
         return ActionResult(True, False)
 
     def _handle_swipe(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle swipe action."""
+        """处理滑动操作。"""
         start = action.get("start")
         end = action.get("end")
 
@@ -190,17 +190,17 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_back(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle back button action."""
+        """处理返回按钮操作。"""
         back(self.device_id)
         return ActionResult(True, False)
 
     def _handle_home(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle home button action."""
+        """处理主页按钮操作。"""
         home(self.device_id)
         return ActionResult(True, False)
 
     def _handle_double_tap(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle double tap action."""
+        """处理双击操作。"""
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
@@ -210,7 +210,7 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_long_press(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle long press action."""
+        """处理长按操作。"""
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
@@ -220,7 +220,7 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_wait(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle wait action."""
+        """处理等待操作。"""
         duration_str = action.get("duration", "1 seconds")
         try:
             duration = float(duration_str.replace("seconds", "").strip())
@@ -231,55 +231,55 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_takeover(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle takeover request (login, captcha, etc.)."""
+        """处理接管请求（登录、验证码等）。"""
         message = action.get("message", "User intervention required")
         self.takeover_callback(message)
         return ActionResult(True, False)
 
     def _handle_note(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle note action (placeholder for content recording)."""
-        # This action is typically used for recording page content
-        # Implementation depends on specific requirements
+        """处理笔记操作（内容记录的占位符）。"""
+        # 此操作通常用于记录页面内容
+        # 实现取决于具体需求
         return ActionResult(True, False)
 
     def _handle_call_api(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle API call action (placeholder for summarization)."""
-        # This action is typically used for content summarization
-        # Implementation depends on specific requirements
+        """处理 API 调用操作（内容摘要的占位符）。"""
+        # 此操作通常用于内容摘要
+        # 实现取决于具体需求
         return ActionResult(True, False)
 
     def _handle_interact(self, action: dict, width: int, height: int) -> ActionResult:
-        """Handle interaction request (user choice needed)."""
-        # This action signals that user input is needed
+        """处理交互请求（需要用户选择）。"""
+        # 此操作表示需要用户输入
         return ActionResult(True, False, message="User interaction required")
 
     @staticmethod
     def _default_confirmation(message: str) -> bool:
-        """Default confirmation callback using console input."""
+        """使用控制台输入的默认确认回调。"""
         response = input(f"Sensitive operation: {message}\nConfirm? (Y/N): ")
         return response.upper() == "Y"
 
     @staticmethod
     def _default_takeover(message: str) -> None:
-        """Default takeover callback using console input."""
+        """使用控制台输入的默认接管回调。"""
         input(f"{message}\nPress Enter after completing manual operation...")
 
 
 def parse_action(response: str) -> dict[str, Any]:
     """
-    Parse action from model response.
+    从模型响应中解析操作。
 
     Args:
-        response: Raw response string from the model.
+        response: 来自模型的原始响应字符串。
 
     Returns:
-        Parsed action dictionary.
+        解析后的操作字典。
 
     Raises:
-        ValueError: If the response cannot be parsed.
+        ValueError: 如果响应无法解析。
     """
     try:
-        # Try to evaluate as Python dict/function call
+        # 尝试作为 Python 字典/函数调用进行评估
         response = response.strip()
         if response.startswith("do"):
             action = eval(response)
@@ -296,12 +296,12 @@ def parse_action(response: str) -> dict[str, Any]:
 
 
 def do(**kwargs) -> dict[str, Any]:
-    """Helper function for creating 'do' actions."""
+    """创建 'do' 操作的辅助函数。"""
     kwargs["_metadata"] = "do"
     return kwargs
 
 
 def finish(**kwargs) -> dict[str, Any]:
-    """Helper function for creating 'finish' actions."""
+    """创建 'finish' 操作的辅助函数。"""
     kwargs["_metadata"] = "finish"
     return kwargs
