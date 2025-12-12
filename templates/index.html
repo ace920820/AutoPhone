@@ -3,85 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoPhone Orchestrator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>AutoPhone</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        .markdown-body pre {
-            background-color: #f3f4f6;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            overflow-x: auto;
+        /* 自定义字体栈，优先使用 Apple 系统字体 */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
-        .markdown-body code {
-            font-family: monospace;
-            background-color: #f3f4f6;
-            padding: 0.2rem 0.4rem;
-            border-radius: 0.25rem;
+
+        /* 隐藏滚动条但保留功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
         }
-        .typing-indicator span {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            background-color: #9ca3af;
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Markdown 样式深度定制 */
+        .prose {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #1d1d1f;
+            max-width: none;
+        }
+        .prose p {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+        .prose strong {
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+        .prose ul {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+            padding-left: 1.5em;
+        }
+        .prose li {
+            margin-top: 0.25em;
+            margin-bottom: 0.25em;
+        }
+        /* 表格样式 */
+        .prose table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            margin: 1em 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            font-size: 0.9rem;
+        }
+        .prose thead {
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .prose th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            color: #6b7280;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .prose td {
+            padding: 12px 16px;
+            border-top: 1px solid #f3f4f6;
+            color: #374151;
+        }
+        .prose tr:first-child td {
+            border-top: none;
+        }
+
+        /* 思考/工具调用过程样式 */
+        .thinking-process {
+            font-size: 0.85rem;
+            color: #6b7280;
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            border-left: 3px solid #e5e7eb;
+            background: #f9fafb;
+            border-radius: 0 8px 8px 0;
+        }
+
+        /* 呼吸灯动画 */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .status-dot-ring::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: inherit;
             border-radius: 50%;
-            animation: typing 1s infinite;
-            margin: 0 2px;
+            z-index: -1;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
         }
-        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-5px); }
+
+        /* 输入框聚焦时的光晕 */
+        .input-glow:focus-within {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1), 0 8px 20px rgba(0, 0, 0, 0.05);
         }
     </style>
 </head>
-<body class="bg-gray-100 h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-white shadow-sm p-4 flex items-center justify-between">
-        <div class="flex items-center space-x-2">
-            <i data-lucide="smartphone" class="text-blue-600"></i>
-            <h1 class="text-xl font-bold text-gray-800">AutoPhone 编排助手</h1>
-        </div>
-        <div class="flex items-center space-x-4 text-sm text-gray-600">
-            <div id="status-indicator" class="flex items-center space-x-1">
-                <div class="w-2 h-2 rounded-full bg-red-500"></div>
-                <span>未连接</span>
+<body class="bg-[#F5F5F7] h-screen flex flex-col overflow-hidden">
+    
+    <!-- 顶部导航栏: 磨砂玻璃效果 -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200/50 h-16 transition-all duration-300">
+        <div class="max-w-4xl mx-auto h-full px-6 flex items-center justify-between">
+            <div class="flex items-center space-x-3 group cursor-default">
+                <div class="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center shadow-lg transform group-hover:scale-105 transition-transform duration-300">
+                    <i data-lucide="smartphone" class="w-4 h-4"></i>
+                </div>
+                <h1 class="text-lg font-semibold tracking-tight text-gray-900">AutoPhone</h1>
+            </div>
+            
+            <div id="status-indicator" class="flex items-center px-3 py-1.5 rounded-full bg-gray-100/50 border border-gray-200/50 backdrop-blur-sm transition-colors duration-300">
+                <div class="relative w-2 h-2 mr-2">
+                    <div class="w-2 h-2 bg-red-500 rounded-full relative z-10 transition-colors duration-300"></div>
+                    <div class="status-dot-ring absolute inset-0 bg-red-500 rounded-full"></div>
+                </div>
+                <span class="text-xs font-medium text-gray-500 transition-colors duration-300">未连接</span>
             </div>
         </div>
     </header>
 
-    <!-- Chat Area -->
-    <main id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4">
-        <!-- Welcome Message -->
-        <div class="flex items-start space-x-3">
-            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <i data-lucide="bot" class="w-5 h-5 text-blue-600"></i>
+    <!-- 聊天内容区域 -->
+    <main id="chat-container" class="flex-1 overflow-y-auto pt-24 pb-32 px-4 scroll-smooth no-scrollbar">
+        <div class="max-w-3xl mx-auto space-y-8">
+            <!-- 欢迎卡片 -->
+            <div class="flex flex-col items-center justify-center py-12 space-y-6 text-center animate-fade-in-up">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-xl mb-4">
+                    <i data-lucide="sparkles" class="w-8 h-8"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-[#1d1d1f] tracking-tight">有什么我可以帮您的吗？</h2>
+                <p class="text-[#86868b] max-w-md text-base leading-relaxed">
+                    我是您的智能手机任务编排专家。您可以让我帮您跨应用比价、查找生活信息、或者规划行程。
+                </p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mt-8">
+                    <button onclick="fillInput('帮我在京东淘宝拼多多比价，找最便宜的iPhone 16 Pro')" class="p-4 bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-100 hover:-translate-y-0.5 transition-all duration-300 text-left group">
+                        <span class="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">全网比价 iPhone 16 Pro</span>
+                        <p class="text-xs text-gray-500 mt-1">京东、淘宝、拼多多自动比价</p>
+                    </button>
+                    <button onclick="fillInput('在小红书找一家好吃的火锅店，然后去大众点评看评分')" class="p-4 bg-white rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-100 hover:-translate-y-0.5 transition-all duration-300 text-left group">
+                        <span class="text-sm font-medium text-gray-900 group-hover:text-blue-600 transition-colors">跨应用查找美食</span>
+                        <p class="text-xs text-gray-500 mt-1">小红书种草 -> 大众点评拔草</p>
+                    </button>
+                </div>
             </div>
-            <div class="bg-white p-3 rounded-lg shadow-sm max-w-[80%]">
-                <p class="text-gray-800">你好！我是手机任务编排助手。我可以帮你操作手机完成复杂的跨应用任务。</p>
-                <p class="text-gray-600 text-sm mt-2">试试说：</p>
-                <ul class="list-disc list-inside text-gray-600 text-sm mt-1">
-                    <li>"在小红书找一家好吃的火锅店，然后去大众点评看评分"</li>
-                    <li>"帮我看看最近有什么好看的科幻电影"</li>
-                </ul>
-            </div>
+            <!-- 消息列表将动态插入这里 -->
         </div>
     </main>
 
-    <!-- Input Area -->
-    <footer class="bg-white p-4 border-t">
-        <div class="max-w-4xl mx-auto flex space-x-2">
-            <input type="text" id="user-input" 
-                class="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="输入你的任务..."
-                onkeypress="handleKeyPress(event)">
-            <button onclick="sendMessage()" 
-                class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                id="send-btn">
-                <span>发送</span>
-                <i data-lucide="send" class="w-4 h-4"></i>
-            </button>
+    <!-- 底部输入区域 -->
+    <footer class="fixed bottom-0 left-0 right-0 p-6 z-40 bg-gradient-to-t from-[#F5F5F7] via-[#F5F5F7]/90 to-transparent pt-12">
+        <div class="max-w-3xl mx-auto">
+            <div class="relative group input-glow bg-white rounded-[24px] shadow-lg border border-gray-200/60 transition-all duration-300">
+                <textarea 
+                    id="user-input" 
+                    rows="1"
+                    class="w-full bg-transparent text-[#1d1d1f] placeholder-gray-400 px-6 py-4 pr-16 rounded-[24px] focus:outline-none resize-none max-h-32 overflow-y-auto leading-relaxed"
+                    placeholder="描述您的任务..."
+                    oninput="autoResize(this)"
+                    onkeypress="handleKeyPress(event)"></textarea>
+                
+                <div class="absolute right-2 bottom-2">
+                    <button onclick="sendMessage()" 
+                        id="send-btn"
+                        class="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 active:scale-95 transition-all duration-200 shadow-md">
+                        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+            <p class="text-center text-[10px] text-gray-400 mt-3 font-medium tracking-wide">由 AutoGLM & Agno 提供强力驱动</p>
         </div>
     </footer>
 
@@ -92,9 +194,21 @@
         let socket = null;
         let isConnecting = false;
         const chatContainer = document.getElementById('chat-container');
+        const listContainer = chatContainer.firstElementChild; // Messages container
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
         const statusIndicator = document.getElementById('status-indicator');
+
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 128) + 'px';
+        }
+
+        function fillInput(text) {
+            userInput.value = text;
+            autoResize(userInput);
+            userInput.focus();
+        }
 
         function connect() {
             if (isConnecting) return;
@@ -111,7 +225,7 @@
             socket.onclose = () => {
                 isConnecting = false;
                 updateStatus(false);
-                setTimeout(connect, 3000); // Auto reconnect
+                setTimeout(connect, 3000);
             };
 
             socket.onmessage = (event) => {
@@ -121,53 +235,59 @@
         }
 
         function updateStatus(connected) {
-            const dot = statusIndicator.querySelector('div');
+            const dot = statusIndicator.querySelector('.bg-red-500, .bg-green-500');
+            const ring = statusIndicator.querySelector('.status-dot-ring');
             const text = statusIndicator.querySelector('span');
+            
             if (connected) {
-                dot.classList.remove('bg-red-500');
-                dot.classList.add('bg-green-500');
+                dot.className = 'w-2 h-2 bg-green-500 rounded-full relative z-10 transition-colors duration-300';
+                ring.className = 'status-dot-ring absolute inset-0 bg-green-500 rounded-full opacity-30';
                 text.textContent = '已连接';
+                text.className = 'text-xs font-medium text-green-600 transition-colors duration-300';
                 sendBtn.disabled = false;
             } else {
-                dot.classList.remove('bg-green-500');
-                dot.classList.add('bg-red-500');
+                dot.className = 'w-2 h-2 bg-red-500 rounded-full relative z-10 transition-colors duration-300';
+                ring.className = 'status-dot-ring absolute inset-0 bg-red-500 rounded-full opacity-30';
                 text.textContent = '未连接';
+                text.className = 'text-xs font-medium text-gray-500 transition-colors duration-300';
                 sendBtn.disabled = true;
             }
         }
 
         function appendMessage(role, content, isHtml = false) {
+            // Remove welcome message if it's the first message
+            const welcomeCard = chatContainer.querySelector('.animate-fade-in-up');
+            if (welcomeCard) {
+                welcomeCard.style.display = 'none';
+            }
+
             const div = document.createElement('div');
-            div.className = 'flex items-start space-x-3 ' + (role === 'user' ? 'justify-end' : '');
+            div.className = 'flex items-start mb-6 animate-fade-in ' + (role === 'user' ? 'justify-end' : '');
             
-            const avatar = role === 'user' 
-                ? `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 order-2 ml-3">
-                     <i data-lucide="user" class="w-5 h-5 text-gray-600"></i>
-                   </div>`
-                : `<div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                     <i data-lucide="bot" class="w-5 h-5 text-blue-600"></i>
-                   </div>`;
-
+            // 极简设计：不显示头像，只通过对齐和气泡样式区分
             const bubbleClass = role === 'user' 
-                ? 'bg-blue-600 text-white rounded-l-lg rounded-br-lg' 
-                : 'bg-white text-gray-800 rounded-r-lg rounded-bl-lg shadow-sm w-full max-w-[80%]';
+                ? 'bg-[#007AFF] text-white rounded-[20px] rounded-tr-[4px] px-5 py-3 shadow-sm max-w-[85%]' 
+                : 'bg-white text-[#1d1d1f] rounded-[20px] rounded-tl-[4px] px-6 py-5 shadow-sm border border-gray-100 max-w-[90%] prose prose-blue';
 
-            let innerContent = isHtml ? content : `<p>${content}</p>`;
+            let innerContent = isHtml ? content : content; // For user, plain text is fine mostly, but here we treat content as potential html for assistant
+
             if (role === 'assistant' && !isHtml) {
-                // Parse markdown for assistant
                 innerContent = marked.parse(content);
             }
 
             div.innerHTML = `
-                ${role !== 'user' ? avatar : ''}
-                <div class="${bubbleClass} p-3 markdown-body">
+                <div class="${bubbleClass} leading-relaxed break-words text-[15px]">
                     ${innerContent}
                 </div>
-                ${role === 'user' ? avatar : ''}
             `;
 
-            chatContainer.appendChild(div);
-            lucide.createIcons();
+            listContainer.appendChild(div);
+            
+            // Re-render icons for new content
+            if (role === 'assistant') {
+                lucide.createIcons();
+            }
+            
             scrollToBottom();
             return div;
         }
@@ -181,26 +301,32 @@
                     currentAssistantMessageDiv = appendMessage('assistant', '', true);
                 }
                 currentAssistantContent += data.content;
-                const contentDiv = currentAssistantMessageDiv.querySelector('.markdown-body');
+                const contentDiv = currentAssistantMessageDiv.querySelector('.leading-relaxed');
                 contentDiv.innerHTML = marked.parse(currentAssistantContent);
                 scrollToBottom();
             } else if (data.type === 'tool_start') {
-                // Show tool execution indicator
-                if (currentAssistantMessageDiv) {
-                    const contentDiv = currentAssistantMessageDiv.querySelector('.markdown-body');
-                    contentDiv.innerHTML += `<div class="text-sm text-gray-500 mt-2 p-2 bg-gray-50 rounded border flex items-center">
-                        <i data-lucide="terminal" class="w-4 h-4 mr-2"></i>
-                        正在执行: ${data.tool_name}
-                    </div>`;
-                    lucide.createIcons();
+                // 如果当前没有消息气泡，创建一个
+                if (!currentAssistantMessageDiv) {
+                    currentAssistantMessageDiv = appendMessage('assistant', '', true);
                 }
-            } else if (data.type === 'tool_end') {
-                // Maybe update the tool indicator to success
+                const contentDiv = currentAssistantMessageDiv.querySelector('.leading-relaxed');
+                
+                // 添加一个漂亮的工具调用指示器
+                const toolHtml = `
+                    <div class="flex items-center space-x-2 text-xs font-medium text-gray-500 bg-gray-50 rounded-lg p-2 my-2 border border-gray-100 select-none">
+                        <div class="animate-spin w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+                        <span>正在执行: ${data.tool_name || 'Phone Operation'}...</span>
+                    </div>
+                `;
+                contentDiv.insertAdjacentHTML('beforeend', toolHtml);
+                scrollToBottom();
+                
             } else if (data.type === 'end') {
                 currentAssistantMessageDiv = null;
                 currentAssistantContent = "";
             } else if (data.type === 'error') {
-                appendMessage('system', `<span class="text-red-500">Error: ${data.content}</span>`, true);
+                appendMessage('system', `<div class="text-red-500 bg-red-50 p-3 rounded-lg border border-red-100 flex items-center"><i data-lucide="alert-circle" class="w-4 h-4 mr-2"></i>${data.content}</div>`, true);
+                lucide.createIcons();
             }
         }
 
@@ -210,9 +336,10 @@
 
             appendMessage('user', text);
             socket.send(JSON.stringify({ type: 'message', content: text }));
-            userInput.value = '';
             
-            // Create a placeholder for the response
+            userInput.value = '';
+            userInput.style.height = 'auto'; // Reset height
+            
             currentAssistantContent = "";
             currentAssistantMessageDiv = null;
         }
@@ -225,10 +352,29 @@
         }
 
         function scrollToBottom() {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            // Smooth scroll to bottom
+            const lastChild = listContainer.lastElementChild;
+            if(lastChild) {
+                lastChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
         }
 
-        // Initialize
+        // Add fade-in animation style dynamically
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-fade-in-up {
+                animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+            .animate-fade-in {
+                animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+        `;
+        document.head.appendChild(style);
+
         connect();
     </script>
 </body>
