@@ -44,7 +44,6 @@ def get_model(model_id: Optional[str] = None):
     # 优先使用传入的 ID，否则使用环境变量配置的 LLM_MODEL，最后默认 qwen-plus
     final_model_id = model_id or os.getenv("LLM_MODEL", "qwen-plus")
     api_key = os.getenv("LLM_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
-    base_url = os.getenv("LLM_BASE_URL")
     
     if not api_key:
         print("⚠️ Warning: No API Key found for DashScope (LLM_API_KEY or DASHSCOPE_API_KEY).")
@@ -52,7 +51,7 @@ def get_model(model_id: Optional[str] = None):
     return DashScope(
         id=final_model_id,
         api_key=api_key,
-        base_url=base_url, # 显式传入 base_url，解决默认使用国际版端点导致 CN Key 报错的问题
+        # DashScope 在 agno 中通常不需要手动指定 base_url，SDK 会处理
     )
 
 # ============================================================

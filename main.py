@@ -18,7 +18,15 @@ import os
 import shutil
 import subprocess
 import sys
+import io
 from urllib.parse import urlparse
+
+# Fix for Windows encoding issues
+if sys.platform.startswith('win'):
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(encoding='utf-8')
 
 from openai import OpenAI
 

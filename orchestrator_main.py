@@ -9,9 +9,17 @@ Usage:
 import argparse
 import os
 import sys
+import io
 from dotenv import load_dotenv
 
-from phone_agent.orchestrator import create_orchestrator_agent
+# Fix for Windows encoding issues
+if sys.platform.startswith('win'):
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if isinstance(sys.stderr, io.TextIOWrapper):
+        sys.stderr.reconfigure(encoding='utf-8')
+
+from phone_agent.registry import get_agent_by_id
 from main import check_system_requirements, check_model_api
 
 # Load environment variables
