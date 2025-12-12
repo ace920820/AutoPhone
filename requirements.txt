@@ -2,6 +2,8 @@ Pillow>=12.0.0
 openai>=2.9.0
 agno>=1.0.0
 python-dotenv>=1.0.0
+dashscope>=1.14.0
+sqlalchemy>=2.0.0
 
 # For Model Deployment
 

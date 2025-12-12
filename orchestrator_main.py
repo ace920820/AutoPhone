@@ -28,8 +28,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model-id",
         type=str,
-        default=os.getenv("ORCHESTRATOR_MODEL", "gpt-4o"),
-        help="Orchestrator model ID (default: gpt-4o)",
+        default=os.getenv("LLM_MODEL", os.getenv("ORCHESTRATOR_MODEL", "gpt-4o")),
+        help="Orchestrator model ID",
+    )
+
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        default=os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY")),
+        help="Orchestrator API Key",
+    )
+
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default=os.getenv("LLM_BASE_URL"),
+        help="Orchestrator API Base URL",
     )
 
     # Phone Agent Model options
@@ -77,24 +91,38 @@ def main():
     if not check_model_api(args.phone_base_url, args.phone_model):
         sys.exit(1)
 
-    # Verify OpenAI API Key for Orchestrator
-    if not os.getenv("OPENAI_API_KEY"):
-        print("⚠️ Warning: OPENAI_API_KEY environment variable is not set.")
-        print("   The orchestrator agent requires an OpenAI API key to function.")
-        print("   Please set it in your environment or .env file.")
-        # We don't exit here, allowing the agno framework to handle the error if it occurs
+    # Verify API Key for Orchestrator
+    if not args.api_key:
+        # Check for DASHSCOPE_API_KEY as well since we are switching to DashScope
+        if not os.getenv("DASHSCOPE_API_KEY"):
+            print("⚠️ Warning: No API Key found for Orchestrator Agent.")
+            print("   Please set LLM_API_KEY or DASHSCOPE_API_KEY in your .env file or provide --api-key argument.")
 
-    print("\n🚀 Initializing Orchestrator Agent...")
+    # Set environment variables from args so registry can pick them up
+    if args.model_id:
+        os.environ["LLM_MODEL"] = args.model_id
+    if args.api_key:
+        os.environ["LLM_API_KEY"] = args.api_key
+    if args.base_url:
+        os.environ["LLM_BASE_URL"] = args.base_url
+    
+    os.environ["PHONE_AGENT_BASE_URL"] = args.phone_base_url
+    os.environ["PHONE_AGENT_MODEL"] = args.phone_model
+    if args.device_id:
+        os.environ["PHONE_AGENT_DEVICE_ID"] = args.device_id
+
+    print("\n🚀 Initializing Orchestrator Agent (Registry Mode)...")
     print(f"   Orchestrator Model: {args.model_id}")
     print(f"   Phone Agent Model: {args.phone_model} @ {args.phone_base_url}")
     
     try:
-        agent = create_orchestrator_agent(
-            model_id=args.model_id,
-            phone_base_url=args.phone_base_url,
-            phone_model_name=args.phone_model,
-            device_id=args.device_id
-        )
+        # Import here to ensure env vars are set before registry initialization
+        from phone_agent.registry import get_agent_by_id
+        
+        agent = get_agent_by_id("phone-orchestrator")
+        if not agent:
+            raise ValueError("Could not find 'phone-orchestrator' in registry")
+            
         print("✅ Orchestrator Agent initialized successfully\n")
     except Exception as e:
         print(f"❌ Failed to initialize agent: {e}")
