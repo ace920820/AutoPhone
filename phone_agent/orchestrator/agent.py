@@ -122,9 +122,11 @@ def create_orchestrator_agent(
         from agno.models.openai import OpenAIChat
         from agno.db.sqlite import SqliteDb
     except ImportError as e:
-        logger.error("未安装 agno 库")
+        logger.error(f"agno 库导入失败: {e}")
+        import traceback
+        traceback.print_exc()
         raise ImportError(
-            "需要安装 agno 库: pip install agno"
+            f"需要安装 agno 库: pip install agno\n详细错误: {e}"
         ) from e
     
     # 从环境变量获取配置
@@ -140,6 +142,10 @@ def create_orchestrator_agent(
         id=model_id,
         api_key=api_key,
         base_url=base_url,
+        # 兼容性修复：某些非 OpenAI 模型不支持 'developer' 角色
+        # Agno 默认将 system prompt 使用 'developer' 角色 (OpenAI o1系列特性)
+        # 这里强制映射回 'system'
+        role_map={"developer": "system"},
     )
     
     # 创建工具
@@ -168,7 +174,7 @@ def create_orchestrator_agent(
         num_history_runs=5,
         # 显示选项
         markdown=True,
-        show_tool_calls=True,
+        # show_tool_calls=True,  # 某些版本不支持此参数
     )
     
     logger.info(f"Orchestrator Agent 创建完成: model={model_id}, memory={enable_memory}")
@@ -309,6 +315,15 @@ class PhoneOrchestrator:
         """
         logger.info(f"Orchestrator 执行任务: {task}")
         
+        if self.verbose:
+            print("\n" + "=" * 60)
+            print("🧠 Orchestrator 开始工作")
+            print("=" * 60)
+            print(f"📝 用户任务: {task}")
+            print(f"🔧 使用模型: {self.model_id}")
+            print(f"💾 记忆功能: {'启用' if self.enable_memory else '禁用'}")
+            print("-" * 60)
+        
         agent = self._get_agent()
         
         # 构建运行参数
@@ -320,21 +335,67 @@ class PhoneOrchestrator:
         
         # 执行
         try:
+            if self.verbose:
+                print("🚀 Orchestrator 正在规划任务...")
+            
             response = agent.run(task, **run_kwargs)
             result = response.content if hasattr(response, 'content') else str(response)
             
+            # 打印详细的执行过程信息
             if self.verbose:
-                print("\n" + "=" * 50)
-                print("📋 Orchestrator 执行结果:")
-                print("-" * 50)
+                self._print_run_details(response)
+                print("\n" + "=" * 60)
+                print("📋 Orchestrator 最终结果:")
+                print("-" * 60)
                 print(result)
-                print("=" * 50 + "\n")
+                print("=" * 60 + "\n")
             
             return result
             
         except Exception as e:
             logger.error(f"Orchestrator 执行失败: {e}")
+            if self.verbose:
+                print(f"\n❌ Orchestrator 执行失败: {e}")
             raise
+    
+    def _print_run_details(self, response) -> None:
+        """打印 Orchestrator 运行详情"""
+        try:
+            # 尝试获取工具调用信息
+            if hasattr(response, 'messages') and response.messages:
+                tool_calls_count = 0
+                for msg in response.messages:
+                    # 检查是否有工具调用
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        for tool_call in msg.tool_calls:
+                            tool_calls_count += 1
+                            tool_name = getattr(tool_call, 'name', 'unknown')
+                            tool_args = getattr(tool_call, 'arguments', {})
+                            print(f"\n🔧 工具调用 #{tool_calls_count}: {tool_name}")
+                            if isinstance(tool_args, dict) and 'task' in tool_args:
+                                print(f"   📌 任务: {tool_args['task']}")
+                            elif isinstance(tool_args, str):
+                                print(f"   📌 参数: {tool_args[:100]}...")
+                    
+                    # 检查工具返回结果
+                    if hasattr(msg, 'role') and msg.role == 'tool':
+                        content = getattr(msg, 'content', '')
+                        if content:
+                            # 截取前 200 字符显示
+                            preview = content[:200] + "..." if len(content) > 200 else content
+                            print(f"   📤 返回: {preview}")
+                
+                if tool_calls_count > 0:
+                    print(f"\n📊 总计调用工具 {tool_calls_count} 次")
+            
+            # 尝试获取 token 使用信息
+            if hasattr(response, 'metrics') and response.metrics:
+                metrics = response.metrics
+                if hasattr(metrics, 'input_tokens'):
+                    print(f"📈 Token 使用: 输入={metrics.input_tokens}, 输出={metrics.output_tokens}")
+                    
+        except Exception as e:
+            logger.debug(f"打印运行详情时出错: {e}")
     
     def run_interactive(self, user_id: str | None = None) -> None:
         """

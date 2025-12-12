@@ -137,8 +137,10 @@ def create_phone_tools(executor: "StepExecutor") -> list:
     try:
         from agno.tools import tool
     except ImportError as e:
-        logger.error("未安装 agno 库")
-        raise ImportError("需要安装 agno 库: pip install agno") from e
+        logger.error(f"agno.tools 导入失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise ImportError(f"需要安装 agno 库: pip install agno\n详细错误: {e}") from e
     
     # 创建 PhoneExecutorTool 实例
     phone_tool = PhoneExecutorTool(executor)
