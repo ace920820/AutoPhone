@@ -6,6 +6,10 @@ import time
 from typing import List, Optional, Tuple
 
 from phone_agent.config.apps import APP_PACKAGES
+from phone_agent.logging_config import get_logger
+
+# 获取日志器
+logger = get_logger("adb.device")
 
 
 def get_current_app(device_id: str | None = None) -> str:
@@ -50,6 +54,7 @@ def tap(x: int, y: int, device_id: str | None = None, delay: float = 1.0) -> Non
         device_id: 可选的 ADB 设备 ID。
         delay: 点击后的延迟（秒）。
     """
+    logger.debug(f"点击: ({x}, {y})")
     adb_prefix = _get_adb_prefix(device_id)
 
     subprocess.run(
@@ -130,6 +135,7 @@ def swipe(
         device_id: 可选的 ADB 设备 ID。
         delay: 滑动后的延迟（秒）。
     """
+    logger.debug(f"滑动: ({start_x}, {start_y}) -> ({end_x}, {end_y})")
     adb_prefix = _get_adb_prefix(device_id)
 
     if duration_ms is None:
@@ -199,7 +205,9 @@ def launch_app(app_name: str, device_id: str | None = None, delay: float = 1.0) 
     Returns:
         如果应用已启动返回 True，如果未找到应用返回 False。
     """
+    logger.info(f"启动应用: {app_name}")
     if app_name not in APP_PACKAGES:
+        logger.warning(f"应用未在配置中找到: {app_name}")
         return False
 
     adb_prefix = _get_adb_prefix(device_id)

@@ -59,3 +59,4 @@ screenshots/
 call_model.py
 app_package_name.py
 data\agentos_sessions.db
+traces

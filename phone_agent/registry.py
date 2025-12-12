@@ -10,10 +10,15 @@ from agno.agent import Agent
 from agno.models.dashscope import DashScope
 from agno.db.sqlite import SqliteDb
 
-from phone_agent.tools import AutoGLMTools
+from phone_agent.logging_config import get_logger, setup_logging
+
+# 初始化日志系统
+setup_logging()
+logger = get_logger("registry")
 
 # 加载环境变量
 load_dotenv()
+logger.debug("环境变量已加载")
 
 # ============================================================
 # 配置常量
@@ -25,14 +30,17 @@ PHONE_DEVICE_ID = os.getenv("PHONE_AGENT_DEVICE_ID")
 
 # 确保数据目录存在
 os.makedirs("data", exist_ok=True)
+logger.debug(f"数据目录已创建: data/")
 
 # ============================================================
 # 数据库存储
 # ============================================================
+logger.debug(f"初始化 SQLite 数据库: {DB_FILE}")
 db = SqliteDb(
     db_file=DB_FILE,
     session_table="agent_sessions",
 )
+logger.info("SQLite 会话存储已初始化")
 
 # ============================================================
 # 模型工厂
@@ -46,23 +54,32 @@ def get_model(model_id: Optional[str] = None):
     api_key = os.getenv("LLM_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
     base_url = os.getenv("LLM_BASE_URL")
     
+    logger.debug(f"创建 DashScope 模型: {final_model_id}")
+    
     if not api_key:
-        print("⚠️ Warning: No API Key found for DashScope (LLM_API_KEY or DASHSCOPE_API_KEY).")
+        logger.warning("未找到 DashScope API Key (LLM_API_KEY 或 DASHSCOPE_API_KEY)")
 
-    return DashScope(
+    model = DashScope(
         id=final_model_id,
         api_key=api_key,
         base_url=base_url, # 显式传入 base_url，解决默认使用国际版端点导致 CN Key 报错的问题
     )
+    logger.info(f"DashScope 模型已初始化: {final_model_id}")
+    return model
 
 # ============================================================
 # 工具初始化
 # ============================================================
+logger.info("开始初始化 Agent 注册表")
+from phone_agent.tools import AutoGLMTools
+
+logger.debug(f"初始化 AutoGLM 工具: model={PHONE_MODEL_NAME}, url={PHONE_BASE_URL}")
 phone_tools = AutoGLMTools(
     base_url=PHONE_BASE_URL,
     model_name=PHONE_MODEL_NAME,
     device_id=PHONE_DEVICE_ID
 )
+logger.info("AutoGLM 工具已初始化")
 
 # ============================================================
 # Agent 定义
@@ -99,4 +116,11 @@ AGENT_MAP: Dict[str, Agent] = {
 }
 
 def get_agent_by_id(agent_id: str = "phone-orchestrator") -> Optional[Agent]:
-    return AGENT_MAP.get(agent_id)
+    agent = AGENT_MAP.get(agent_id)
+    if agent:
+        logger.debug(f"获取 Agent: {agent_id}")
+    else:
+        logger.warning(f"Agent 未找到: {agent_id}")
+    return agent
+
+logger.info("Agent 注册表初始化完成")

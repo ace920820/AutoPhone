@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from phone_agent.logging_config import get_logger
+
+# 获取日志器
+logger = get_logger("adb.connection")
+
 
 class ConnectionType(Enum):
     """ADB 连接类型。"""
@@ -50,6 +55,7 @@ class ADBConnection:
             adb_path: ADB 可执行文件的路径。
         """
         self.adb_path = adb_path
+        logger.debug(f"ADBConnection 初始化: adb_path={adb_path}")
 
     def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:
         """
@@ -69,6 +75,8 @@ class ADBConnection:
         # 验证地址格式
         if ":" not in address:
             address = f"{address}:5555"  # 默认 ADB 端口
+        
+        logger.info(f"连接到设备: {address}")
 
         try:
             # 使用 UTF-8 编码解决 Windows GBK 编码问题
@@ -84,15 +92,20 @@ class ADBConnection:
             output = result.stdout + result.stderr
 
             if "connected" in output.lower():
+                logger.info(f"成功连接到 {address}")
                 return True, f"Connected to {address}"
             elif "already connected" in output.lower():
+                logger.info(f"已经连接到 {address}")
                 return True, f"Already connected to {address}"
             else:
+                logger.warning(f"连接失败: {output.strip()}")
                 return False, output.strip()
 
         except subprocess.TimeoutExpired:
+            logger.error(f"连接超时: {timeout}s")
             return False, f"Connection timeout after {timeout}s"
         except Exception as e:
+            logger.error(f"连接错误: {e}")
             return False, f"Connection error: {e}"
 
     def disconnect(self, address: str | None = None) -> tuple[bool, str]:
@@ -105,6 +118,7 @@ class ADBConnection:
         Returns:
             (success, message) 元组。
         """
+        logger.info(f"断开连接: {address or '所有设备'}")
         try:
             cmd = [self.adb_path, "disconnect"]
             if address:
@@ -114,9 +128,11 @@ class ADBConnection:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=5, encoding='utf-8', errors='replace')
 
             output = result.stdout + result.stderr
+            logger.debug(f"断开连接结果: {output.strip()}")
             return True, output.strip() or "Disconnected"
 
         except Exception as e:
+            logger.error(f"断开连接错误: {e}")
             return False, f"Disconnect error: {e}"
 
     def list_devices(self) -> list[DeviceInfo]:
@@ -126,6 +142,7 @@ class ADBConnection:
         Returns:
             DeviceInfo 对象列表。
         """
+        logger.debug("获取设备列表")
         try:
             # 使用 UTF-8 编码解决 Windows GBK 编码问题
             result = subprocess.run(
@@ -171,10 +188,11 @@ class ADBConnection:
                         )
                     )
 
+            logger.debug(f"找到 {len(devices)} 个设备")
             return devices
 
         except Exception as e:
-            print(f"Error listing devices: {e}")
+            logger.error(f"获取设备列表错误: {e}")
             return []
 
     def get_device_info(self, device_id: str | None = None) -> DeviceInfo | None:
@@ -253,11 +271,14 @@ class ADBConnection:
 
             if "restarting" in output.lower() or result.returncode == 0:
                 time.sleep(2)  # 等待 ADB 重启
+                logger.info(f"TCP/IP 模式已启用: 端口 {port}")
                 return True, f"TCP/IP mode enabled on port {port}"
             else:
+                logger.warning(f"启用 TCP/IP 失败: {output.strip()}")
                 return False, output.strip()
 
         except Exception as e:
+            logger.error(f"启用 TCP/IP 错误: {e}")
             return False, f"Error enabling TCP/IP: {e}"
 
     def get_device_ip(self, device_id: str | None = None) -> str | None:
@@ -308,7 +329,7 @@ class ADBConnection:
             return None
 
         except Exception as e:
-            print(f"Error getting device IP: {e}")
+            logger.error(f"获取设备 IP 错误: {e}")
             return None
 
     def restart_server(self) -> tuple[bool, str]:
@@ -331,9 +352,11 @@ class ADBConnection:
                 [self.adb_path, "start-server"], capture_output=True, timeout=5
             )
 
+            logger.info("ADB 服务器已重启")
             return True, "ADB server restarted"
 
         except Exception as e:
+            logger.error(f"重启 ADB 服务器错误: {e}")
             return False, f"Error restarting server: {e}"
 
 

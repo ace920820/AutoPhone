@@ -10,6 +10,10 @@ from io import BytesIO
 from typing import Tuple
 
 from PIL import Image
+from phone_agent.logging_config import get_logger
+
+# 获取日志器
+logger = get_logger("adb.screenshot")
 
 
 @dataclass
@@ -39,6 +43,8 @@ def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensho
     """
     temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4()}.png")
     adb_prefix = _get_adb_prefix(device_id)
+    
+    logger.debug(f"开始截图 - 设备: {device_id or '默认'}")
 
     try:
         # 执行截图命令
@@ -55,6 +61,7 @@ def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensho
         # 检查截图失败（敏感屏幕）
         output = result.stdout + result.stderr
         if "Status: -1" in output or "Failed" in output:
+            logger.warning("截图失败: 可能是敏感屏幕")
             return _create_fallback_screenshot(is_sensitive=True)
 
         # 将截图拉取到本地临时路径
@@ -69,6 +76,7 @@ def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensho
         )
 
         if not os.path.exists(temp_path):
+            logger.warning("截图文件不存在")
             return _create_fallback_screenshot(is_sensitive=False)
 
         # 读取并编码图像
@@ -82,12 +90,13 @@ def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screensho
         # 清理
         os.remove(temp_path)
 
+        logger.debug(f"截图成功: {width}x{height}")
         return Screenshot(
             base64_data=base64_data, width=width, height=height, is_sensitive=False
         )
 
     except Exception as e:
-        print(f"Screenshot error: {e}")
+        logger.error(f"截图错误: {e}")
         return _create_fallback_screenshot(is_sensitive=False)
 
 
@@ -100,6 +109,7 @@ def _get_adb_prefix(device_id: str | None) -> list:
 
 def _create_fallback_screenshot(is_sensitive: bool) -> Screenshot:
     """当截图失败时创建黑色备用图像。"""
+    logger.debug(f"创建备用截图 - 敏感屏幕: {is_sensitive}")
     default_width, default_height = 1080, 2400
 
     black_img = Image.new("RGB", (default_width, default_height), color="black")

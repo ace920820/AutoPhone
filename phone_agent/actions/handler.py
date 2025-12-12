@@ -4,6 +4,11 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from phone_agent.logging_config import get_logger
+
+# 获取日志器
+logger = get_logger("handler")
+
 from phone_agent.adb import (
     back,
     clear_text,
@@ -49,6 +54,7 @@ class ActionHandler:
         self.device_id = device_id
         self.confirmation_callback = confirmation_callback or self._default_confirmation
         self.takeover_callback = takeover_callback or self._default_takeover
+        logger.debug(f"ActionHandler 初始化 - 设备: {device_id or '默认'}")
 
     def execute(
         self, action: dict[str, Any], screen_width: int, screen_height: int
@@ -67,11 +73,13 @@ class ActionHandler:
         action_type = action.get("_metadata")
 
         if action_type == "finish":
+            logger.info(f"任务完成: {action.get('message')}")
             return ActionResult(
                 success=True, should_finish=True, message=action.get("message")
             )
 
         if action_type != "do":
+            logger.warning(f"未知操作类型: {action_type}")
             return ActionResult(
                 success=False,
                 should_finish=True,
@@ -82,6 +90,7 @@ class ActionHandler:
         handler_method = self._get_handler(action_name)
 
         if handler_method is None:
+            logger.warning(f"未知操作: {action_name}")
             return ActionResult(
                 success=False,
                 should_finish=False,
@@ -89,8 +98,12 @@ class ActionHandler:
             )
 
         try:
-            return handler_method(action, screen_width, screen_height)
+            logger.debug(f"执行操作: {action_name}")
+            result = handler_method(action, screen_width, screen_height)
+            logger.debug(f"操作 {action_name} 完成: success={result.success}")
+            return result
         except Exception as e:
+            logger.error(f"操作 {action_name} 执行失败: {e}", exc_info=True)
             return ActionResult(
                 success=False, should_finish=False, message=f"Action failed: {e}"
             )
@@ -127,24 +140,32 @@ class ActionHandler:
         """处理应用启动操作。"""
         app_name = action.get("app")
         if not app_name:
+            logger.warning("启动应用失败: 未指定应用名称")
             return ActionResult(False, False, "No app name specified")
 
+        logger.info(f"启动应用: {app_name}")
         success = launch_app(app_name, self.device_id)
         if success:
+            logger.debug(f"应用 {app_name} 启动成功")
             return ActionResult(True, False)
+        logger.warning(f"应用未找到: {app_name}")
         return ActionResult(False, False, f"App not found: {app_name}")
 
     def _handle_tap(self, action: dict, width: int, height: int) -> ActionResult:
         """处理点击操作。"""
         element = action.get("element")
         if not element:
+            logger.warning("点击操作失败: 未指定坐标")
             return ActionResult(False, False, "No element coordinates")
 
         x, y = self._convert_relative_to_absolute(element, width, height)
+        logger.debug(f"点击坐标: ({x}, {y}) [原始: {element}]")
 
         # 检查敏感操作
         if "message" in action:
+            logger.info(f"敏感操作确认: {action['message']}")
             if not self.confirmation_callback(action["message"]):
+                logger.warning("用户取消了敏感操作")
                 return ActionResult(
                     success=False,
                     should_finish=True,
@@ -157,19 +178,24 @@ class ActionHandler:
     def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
         """处理文本输入操作。"""
         text = action.get("text", "")
+        logger.info(f"输入文本: {text[:20]}{'...' if len(text) > 20 else ''}")
 
         # 切换到 ADB 键盘
+        logger.debug("切换到 ADB 键盘")
         original_ime = detect_and_set_adb_keyboard(self.device_id)
         time.sleep(1.0)
 
         # 清除现有文本并输入新文本
+        logger.debug("清除现有文本")
         clear_text(self.device_id)
         time.sleep(1.0)
 
+        logger.debug("输入新文本")
         type_text(text, self.device_id)
         time.sleep(1.0)
 
         # 恢复原始键盘
+        logger.debug(f"恢复原始键盘: {original_ime}")
         restore_keyboard(original_ime, self.device_id)
         time.sleep(1.0)
 
@@ -181,21 +207,25 @@ class ActionHandler:
         end = action.get("end")
 
         if not start or not end:
+            logger.warning("滑动操作失败: 缺少坐标")
             return ActionResult(False, False, "Missing swipe coordinates")
 
         start_x, start_y = self._convert_relative_to_absolute(start, width, height)
         end_x, end_y = self._convert_relative_to_absolute(end, width, height)
+        logger.debug(f"滑动: ({start_x}, {start_y}) -> ({end_x}, {end_y})")
 
         swipe(start_x, start_y, end_x, end_y, device_id=self.device_id)
         return ActionResult(True, False)
 
     def _handle_back(self, action: dict, width: int, height: int) -> ActionResult:
         """处理返回按钮操作。"""
+        logger.debug("按下返回键")
         back(self.device_id)
         return ActionResult(True, False)
 
     def _handle_home(self, action: dict, width: int, height: int) -> ActionResult:
         """处理主页按钮操作。"""
+        logger.debug("按下主页键")
         home(self.device_id)
         return ActionResult(True, False)
 
@@ -227,13 +257,16 @@ class ActionHandler:
         except ValueError:
             duration = 1.0
 
+        logger.debug(f"等待 {duration} 秒")
         time.sleep(duration)
         return ActionResult(True, False)
 
     def _handle_takeover(self, action: dict, width: int, height: int) -> ActionResult:
         """处理接管请求（登录、验证码等）。"""
         message = action.get("message", "User intervention required")
+        logger.info(f"请求用户接管: {message}")
         self.takeover_callback(message)
+        logger.debug("用户接管完成")
         return ActionResult(True, False)
 
     def _handle_note(self, action: dict, width: int, height: int) -> ActionResult:
