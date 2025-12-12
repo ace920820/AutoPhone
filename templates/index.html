@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoPhone Orchestrator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .markdown-body pre {
+            background-color: #f3f4f6;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+        }
+        .markdown-body code {
+            font-family: monospace;
+            background-color: #f3f4f6;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #9ca3af;
+            border-radius: 50%;
+            animation: typing 1s infinite;
+            margin: 0 2px;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white shadow-sm p-4 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+            <i data-lucide="smartphone" class="text-blue-600"></i>
+            <h1 class="text-xl font-bold text-gray-800">AutoPhone 编排助手</h1>
+        </div>
+        <div class="flex items-center space-x-4 text-sm text-gray-600">
+            <div id="status-indicator" class="flex items-center space-x-1">
+                <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                <span>未连接</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Chat Area -->
+    <main id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-4">
+        <!-- Welcome Message -->
+        <div class="flex items-start space-x-3">
+            <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <i data-lucide="bot" class="w-5 h-5 text-blue-600"></i>
+            </div>
+            <div class="bg-white p-3 rounded-lg shadow-sm max-w-[80%]">
+                <p class="text-gray-800">你好！我是手机任务编排助手。我可以帮你操作手机完成复杂的跨应用任务。</p>
+                <p class="text-gray-600 text-sm mt-2">试试说：</p>
+                <ul class="list-disc list-inside text-gray-600 text-sm mt-1">
+                    <li>"在小红书找一家好吃的火锅店，然后去大众点评看评分"</li>
+                    <li>"帮我看看最近有什么好看的科幻电影"</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <!-- Input Area -->
+    <footer class="bg-white p-4 border-t">
+        <div class="max-w-4xl mx-auto flex space-x-2">
+            <input type="text" id="user-input" 
+                class="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="输入你的任务..."
+                onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()" 
+                class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                id="send-btn">
+                <span>发送</span>
+                <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        lucide.createIcons();
+        
+        let socket = null;
+        let isConnecting = false;
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const statusIndicator = document.getElementById('status-indicator');
+
+        function connect() {
+            if (isConnecting) return;
+            isConnecting = true;
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            socket.onopen = () => {
+                isConnecting = false;
+                updateStatus(true);
+            };
+
+            socket.onclose = () => {
+                isConnecting = false;
+                updateStatus(false);
+                setTimeout(connect, 3000); // Auto reconnect
+            };
+
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+        }
+
+        function updateStatus(connected) {
+            const dot = statusIndicator.querySelector('div');
+            const text = statusIndicator.querySelector('span');
+            if (connected) {
+                dot.classList.remove('bg-red-500');
+                dot.classList.add('bg-green-500');
+                text.textContent = '已连接';
+                sendBtn.disabled = false;
+            } else {
+                dot.classList.remove('bg-green-500');
+                dot.classList.add('bg-red-500');
+                text.textContent = '未连接';
+                sendBtn.disabled = true;
+            }
+        }
+
+        function appendMessage(role, content, isHtml = false) {
+            const div = document.createElement('div');
+            div.className = 'flex items-start space-x-3 ' + (role === 'user' ? 'justify-end' : '');
+            
+            const avatar = role === 'user' 
+                ? `<div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 order-2 ml-3">
+                     <i data-lucide="user" class="w-5 h-5 text-gray-600"></i>
+                   </div>`
+                : `<div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                     <i data-lucide="bot" class="w-5 h-5 text-blue-600"></i>
+                   </div>`;
+
+            const bubbleClass = role === 'user' 
+                ? 'bg-blue-600 text-white rounded-l-lg rounded-br-lg' 
+                : 'bg-white text-gray-800 rounded-r-lg rounded-bl-lg shadow-sm w-full max-w-[80%]';
+
+            let innerContent = isHtml ? content : `<p>${content}</p>`;
+            if (role === 'assistant' && !isHtml) {
+                // Parse markdown for assistant
+                innerContent = marked.parse(content);
+            }
+
+            div.innerHTML = `
+                ${role !== 'user' ? avatar : ''}
+                <div class="${bubbleClass} p-3 markdown-body">
+                    ${innerContent}
+                </div>
+                ${role === 'user' ? avatar : ''}
+            `;
+
+            chatContainer.appendChild(div);
+            lucide.createIcons();
+            scrollToBottom();
+            return div;
+        }
+
+        let currentAssistantMessageDiv = null;
+        let currentAssistantContent = "";
+
+        function handleMessage(data) {
+            if (data.type === 'chunk') {
+                if (!currentAssistantMessageDiv) {
+                    currentAssistantMessageDiv = appendMessage('assistant', '', true);
+                }
+                currentAssistantContent += data.content;
+                const contentDiv = currentAssistantMessageDiv.querySelector('.markdown-body');
+                contentDiv.innerHTML = marked.parse(currentAssistantContent);
+                scrollToBottom();
+            } else if (data.type === 'tool_start') {
+                // Show tool execution indicator
+                if (currentAssistantMessageDiv) {
+                    const contentDiv = currentAssistantMessageDiv.querySelector('.markdown-body');
+                    contentDiv.innerHTML += `<div class="text-sm text-gray-500 mt-2 p-2 bg-gray-50 rounded border flex items-center">
+                        <i data-lucide="terminal" class="w-4 h-4 mr-2"></i>
+                        正在执行: ${data.tool_name}
+                    </div>`;
+                    lucide.createIcons();
+                }
+            } else if (data.type === 'tool_end') {
+                // Maybe update the tool indicator to success
+            } else if (data.type === 'end') {
+                currentAssistantMessageDiv = null;
+                currentAssistantContent = "";
+            } else if (data.type === 'error') {
+                appendMessage('system', `<span class="text-red-500">Error: ${data.content}</span>`, true);
+            }
+        }
+
+        function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+            appendMessage('user', text);
+            socket.send(JSON.stringify({ type: 'message', content: text }));
+            userInput.value = '';
+            
+            // Create a placeholder for the response
+            currentAssistantContent = "";
+            currentAssistantMessageDiv = null;
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Initialize
+        connect();
+    </script>
+</body>
+</html>

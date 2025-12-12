@@ -19,7 +19,6 @@ if sys.platform.startswith('win'):
     if isinstance(sys.stderr, io.TextIOWrapper):
         sys.stderr.reconfigure(encoding='utf-8')
 
-from phone_agent.registry import get_agent_by_id
 from main import check_system_requirements, check_model_api
 
 # Load environment variables
@@ -85,11 +84,42 @@ def parse_args() -> argparse.Namespace:
         help="Task to execute (interactive mode if not provided)",
     )
 
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Start the Web Interface",
+    )
+
     return parser.parse_args()
 
 def main():
     """Main entry point."""
     args = parse_args()
+
+    # If web mode is requested, start the web server
+    if args.web:
+        # Set environment variables from args so registry can pick them up
+        if args.model_id:
+            os.environ["LLM_MODEL"] = args.model_id
+        if args.api_key:
+            os.environ["LLM_API_KEY"] = args.api_key
+        if args.base_url:
+            os.environ["LLM_BASE_URL"] = args.base_url
+        
+        os.environ["PHONE_AGENT_BASE_URL"] = args.phone_base_url
+        os.environ["PHONE_AGENT_MODEL"] = args.phone_model
+        if args.device_id:
+            os.environ["PHONE_AGENT_DEVICE_ID"] = args.device_id
+            
+        print("\n🚀 Starting AutoPhone Orchestrator Web Interface...")
+        print(f"   Orchestrator Model: {args.model_id}")
+        print(f"   Phone Agent Model: {args.phone_model}")
+        print("   Listening on: http://localhost:8000")
+        
+        import uvicorn
+        from web_main import app
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+        return
 
     # Check system requirements (ADB, etc)
     if not check_system_requirements():

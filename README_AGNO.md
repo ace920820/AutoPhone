@@ -43,11 +43,22 @@ python orchestrator_main.py
 python orchestrator_main.py "在小红书找一家好吃的火锅店，然后去大众点评看评分"
 ```
 
+### Web 界面启动
+
+启动 Web 界面以获得更友好的交互体验：
+
+```bash
+python orchestrator_main.py --web
+```
+
+访问 `http://localhost:8000` 即可使用。
+
 ### 参数说明
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `--model-id` | 编排 Agent 使用的模型 (OpenAI) | `gpt-4o` |
+| `--web` | 启动 Web 界面 | `False` |
+| `--model-id` | 编排 Agent 使用的模型 (OpenAI/DashScope) | `gpt-4o` / `qwen-plus` |
 | `--phone-base-url` | Phone Agent 模型服务 URL | `http://localhost:8000/v1` |
 | `--phone-model` | Phone Agent 模型名称 | `autoglm-phone-9b` |
 | `--device-id` | 指定 ADB 设备 ID | (自动检测) |
