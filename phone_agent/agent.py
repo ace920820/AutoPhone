@@ -13,6 +13,7 @@ from phone_agent.model import ModelClient, ModelConfig
 from phone_agent.model.client import MessageBuilder
 from phone_agent.logging_config import get_logger, setup_logging
 from phone_agent.tracing import ExecutionTracer
+from phone_agent.error_handler import get_error_recovery_manager, ErrorType
 
 # 初始化日志系统
 setup_logging()
@@ -74,6 +75,7 @@ class PhoneAgent:
         agent_config: AgentConfig | None = None,
         confirmation_callback: Callable[[str], bool] | None = None,
         takeover_callback: Callable[[str], None] | None = None,
+        step_callback: Callable[[StepResult], None] | None = None,
     ):
         self.model_config = model_config or ModelConfig()
         self.agent_config = agent_config or AgentConfig()
@@ -88,6 +90,11 @@ class PhoneAgent:
         self._context: list[dict[str, Any]] = []
         self._step_count = 0
         self._tracer: Optional[ExecutionTracer] = None
+        self._step_callback = step_callback
+        self._is_paused = False
+        self._current_app: str = ""
+        self._last_error: Optional[str] = None
+        self._error_recovery_manager = get_error_recovery_manager()
         
         logger.info(
             f"PhoneAgent 初始化完成 - 模型: {self.model_config.model_name}, "
@@ -145,10 +152,28 @@ class PhoneAgent:
             
         except Exception as e:
             logger.error(f"任务执行异常: {e}", exc_info=True)
+            
+            # 尝试错误恢复
+            recovery_result = self._error_recovery_manager.handle_error(
+                e,
+                context={
+                    "task": task,
+                    "step_count": self._step_count,
+                    "current_app": self._current_app,
+                }
+            )
+            
+            logger.info(f"错误恢复结果: {recovery_result.message}")
+            
             if self._tracer:
-                self._tracer.fail(str(e))
+                self._tracer.fail(f"{str(e)}\n恢复尝试: {recovery_result.message}")
                 if self.agent_config.save_trace_report:
                     self._tracer.save_html_report()
+            
+            # 如果建议重试，可以在这里实现重试逻辑
+            if recovery_result.should_retry:
+                logger.info(f"建议重试策略: {recovery_result.new_strategy}")
+            
             raise
 
     def step(self, task: str | None = None) -> StepResult:
@@ -175,7 +200,42 @@ class PhoneAgent:
         self._context = []
         self._step_count = 0
         self._tracer = None
+        self._is_paused = False
+        self._last_error = None
+        self._error_recovery_manager.reset_retry_count()
         logger.debug("Agent 状态已重置")
+    
+    def set_step_callback(self, callback: Callable[[StepResult], None]) -> None:
+        """设置步骤回调函数，用于流式反馈。"""
+        self._step_callback = callback
+        logger.debug("步骤回调已设置")
+    
+    def pause(self) -> None:
+        """暂停任务执行。"""
+        self._is_paused = True
+        logger.info("任务已暂停")
+    
+    def resume(self) -> None:
+        """恢复任务执行。"""
+        self._is_paused = False
+        logger.info("任务已恢复")
+    
+    def get_state(self) -> dict[str, Any]:
+        """
+        获取当前 Agent 状态。
+        
+        Returns:
+            包含当前状态信息的字典
+        """
+        return {
+            "step_count": self._step_count,
+            "is_paused": self._is_paused,
+            "is_busy": self._step_count > 0 and not self._is_paused,
+            "current_app": self._current_app,
+            "last_error": self._last_error,
+            "device_id": self.agent_config.device_id,
+            "max_steps": self.agent_config.max_steps,
+        }
     
     def _finish_trace(self, result: str, success: bool) -> None:
         """完成执行跟踪并保存报告。"""
@@ -192,10 +252,16 @@ class PhoneAgent:
         self._step_count += 1
         logger.debug(f"执行步骤 {self._step_count}")
 
+        # 检查是否暂停
+        while self._is_paused:
+            import time
+            time.sleep(0.1)
+        
         # 捕获当前屏幕状态
         logger.debug("捕获屏幕截图...")
         screenshot = get_screenshot(self.agent_config.device_id)
         current_app = get_current_app(self.agent_config.device_id)
+        self._current_app = current_app
         logger.debug(f"当前应用: {current_app}")
 
         # 构建消息
@@ -229,6 +295,7 @@ class PhoneAgent:
             logger.debug(f"模型响应成功，操作: {response.action[:50]}...")
         except Exception as e:
             logger.error(f"模型请求失败: {e}", exc_info=True)
+            self._last_error = f"Model error: {e}"
             if self.agent_config.verbose:
                 traceback.print_exc()
             # 记录到跟踪
@@ -242,13 +309,17 @@ class PhoneAgent:
                     success=False,
                     error_message=str(e)
                 )
-            return StepResult(
+            step_result = StepResult(
                 success=False,
                 finished=True,
                 action=None,
                 thinking="",
                 message=f"Model error: {e}",
             )
+            # 触发步骤回调
+            if self._step_callback:
+                self._step_callback(step_result)
+            return step_result
 
         # 从响应中解析操作
         try:
@@ -323,13 +394,22 @@ class PhoneAgent:
                 )
                 print("=" * 50 + "\n")
 
-        return StepResult(
+        step_result = StepResult(
             success=result.success,
             finished=finished,
             action=action,
             thinking=response.thinking,
             message=result.message or action.get("message"),
         )
+        
+        # 触发步骤回调（流式反馈）
+        if self._step_callback:
+            try:
+                self._step_callback(step_result)
+            except Exception as e:
+                logger.warning(f"步骤回调执行失败: {e}")
+        
+        return step_result
 
     @property
     def context(self) -> list[dict[str, Any]]:
