@@ -10,6 +10,7 @@ from agno.tools import Toolkit
 from phone_agent.agent import PhoneAgent, AgentConfig, StepResult
 from phone_agent.model import ModelConfig
 from phone_agent.logging_config import get_logger
+from phone_agent.multi_agent.decision_agent import DecisionAgent
 
 # 获取日志器
 logger = get_logger("tools")
@@ -26,7 +27,8 @@ class AutoGLMTools(Toolkit):
         self,
         base_url: str = "http://localhost:8000/v1",
         model_name: str = "autoglm-phone-9b",
-        device_id: Optional[str] = None
+        device_id: Optional[str] = None,
+        decision_model: Optional[str] = None  # DecisionAgent 使用的模型
     ):
         super().__init__(name="autoglm_tools")
         
@@ -45,6 +47,9 @@ class AutoGLMTools(Toolkit):
         self.phone_agent = PhoneAgent(model_config, agent_config)
         self._step_history: list[Dict[str, Any]] = []
         
+        # 初始化 DecisionAgent（用于任务预分解）
+        self._init_decision_agent(decision_model)
+        
         # 注册所有工具
         self.register(self.run_phone_task)
         self.register(self.get_phone_status)
@@ -53,8 +58,39 @@ class AutoGLMTools(Toolkit):
         self.register(self.pause_phone_task)
         self.register(self.resume_phone_task)
         self.register(self.get_step_history)
+        self.register(self.decompose_task)  # 新增：任务分解工具
         
-        logger.info("所有工具已注册: run_phone_task, get_phone_status, extract_screen_info, check_app_installed, pause_phone_task, resume_phone_task, get_step_history")
+        logger.info("所有工具已注册: run_phone_task, get_phone_status, extract_screen_info, check_app_installed, pause_phone_task, resume_phone_task, get_step_history, decompose_task")
+    
+    def _init_decision_agent(self, decision_model: Optional[str] = None):
+        """
+        初始化 DecisionAgent 用于任务预分解
+        
+        Args:
+            decision_model: 指定使用的模型，默认使用环境变量 LLM_MODEL 或 qwen-plus
+        """
+        try:
+            # 获取 DashScope API 配置
+            api_key = os.getenv("LLM_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
+            base_url = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+            model_name = decision_model or os.getenv("LLM_MODEL", "qwen-plus")
+            
+            if not api_key or api_key == "EMPTY":
+                logger.warning("未配置 LLM_API_KEY，DecisionAgent 将不可用")
+                self.decision_agent = None
+                return
+            
+            decision_config = ModelConfig(
+                base_url=base_url,
+                model_name=model_name,
+                api_key=api_key
+            )
+            self.decision_agent = DecisionAgent(decision_config)
+            logger.info(f"DecisionAgent 已初始化 - 模型: {model_name}")
+            
+        except Exception as e:
+            logger.error(f"DecisionAgent 初始化失败: {e}")
+            self.decision_agent = None
 
     def run_phone_task(self, task_description: str) -> str:
         """
@@ -69,8 +105,24 @@ class AutoGLMTools(Toolkit):
         Returns:
             str: 任务执行结果的描述
         """
-        logger.info(f"📱 开始执行子任务: {task_description}")
-        print(f"\n[AutoGLM] 开始执行子任务: {task_description}")
+        logger.info(f"开始执行子任务: {task_description}")
+        
+        # 检查是否有分解的步骤列表，显示进度
+        step_progress = ""
+        if hasattr(self, '_decomposed_steps') and self._decomposed_steps:
+            # 尝试匹配当前任务是第几步
+            for i, step in enumerate(self._decomposed_steps):
+                if step in task_description or task_description in step:
+                    step_progress = f" [步骤 {i+1}/{len(self._decomposed_steps)}]"
+                    break
+            else:
+                # 如果没匹配到，使用计数器
+                if hasattr(self, '_current_step_index'):
+                    self._current_step_index += 1
+                    if self._current_step_index <= len(self._decomposed_steps):
+                        step_progress = f" [步骤 {self._current_step_index}/{len(self._decomposed_steps)}]"
+        
+        print(f"\n[AutoGLM]{step_progress} 执行: {task_description}")
         
         # 清空步骤历史
         self._step_history = []
@@ -303,3 +355,56 @@ class AutoGLMTools(Toolkit):
         """
         logger.debug(f"获取步骤历史，共 {len(self._step_history)} 步")
         return json.dumps(self._step_history, ensure_ascii=False, indent=2)
+    
+    def decompose_task(self, task: str) -> str:
+        """
+        将复杂任务分解为具体可执行的子步骤。
+        
+        对于涉及多个应用、多个筛选条件或多个操作的复杂任务，
+        使用此工具先进行分解，然后逐步执行每个子步骤。
+        
+        分解后的步骤会保留所有关键条件（如价格限制、评分要求等），
+        确保执行时不会遗漏重要约束。
+        
+        Args:
+            task: 复杂任务描述，例如 "在大众点评找一家静安寺附近评分4.5以上、
+                  人均150以下的日料餐厅，然后用高德地图查路线"
+            
+        Returns:
+            str: JSON 格式的步骤列表，例如 {"steps": ["步骤1", "步骤2", ...]}
+        """
+        logger.info(f"[DecisionAgent] 开始分解任务: {task[:50]}...")
+        
+        if not self.decision_agent:
+            # DecisionAgent 不可用时，返回原任务作为单一步骤
+            logger.warning("DecisionAgent 不可用，返回原任务")
+            return json.dumps({"steps": [task], "note": "DecisionAgent 不可用，未进行分解"}, ensure_ascii=False)
+        
+        try:
+            # 调用 DecisionAgent 分解任务
+            steps = self.decision_agent.decompose_task(task)
+            
+            logger.info(f"[DecisionAgent] 任务分解完成，共 {len(steps)} 个步骤")
+            
+            # 打印分解结果到控制台，让用户看到计划
+            print("\n" + "=" * 60)
+            print("[DecisionAgent] 任务分解结果")
+            print("=" * 60)
+            print(f"原始任务: {task[:80]}{'...' if len(task) > 80 else ''}")
+            print("-" * 60)
+            print(f"分解为 {len(steps)} 个子步骤:")
+            for i, step in enumerate(steps, 1):
+                print(f"  [{i:2d}] {step}")
+            print("=" * 60 + "\n")
+            
+            # 保存步骤列表供后续追踪
+            self._decomposed_steps = steps
+            self._current_step_index = 0
+            
+            return json.dumps({"steps": steps}, ensure_ascii=False, indent=2)
+            
+        except Exception as e:
+            error_msg = f"任务分解失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            # 失败时返回原任务
+            return json.dumps({"steps": [task], "error": error_msg}, ensure_ascii=False)
